@@ -1,0 +1,24 @@
+# Logs and test data — never push
+lionguard_logs/
+sandbox/openclaw_home/
+sandbox/logs/
+sandbox/red_team_logs/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+
+# Secrets — NEVER push
+.env
+*.env
+auth-profiles.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
