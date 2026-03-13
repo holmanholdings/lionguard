@@ -128,9 +128,3 @@ Lionguard is Aegis adapted for the AI agent ecosystem. Same cathedral-grade engi
 ## License
 
 MIT — Use it. Ship it. Protect people with it.
-
----
-
-*"Out of difficulties grow miracles." — Jean de la Bruyère*
-
-*Built with love by the Lions. 🦁*
