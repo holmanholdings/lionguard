@@ -35,6 +35,9 @@ def main():
     test_parser.add_argument("--provider", default="local")
     test_parser.add_argument("--model", default="llama3.1:8b")
 
+    # configure command
+    subparsers.add_parser("configure", help="Set up Lionguard (local or cloud)")
+
     # version
     subparsers.add_parser("version", help="Show version")
 
@@ -63,11 +66,63 @@ def main():
         status = guard.get_status()
         print(json.dumps(status, indent=2))
 
+    elif args.command == "configure":
+        _run_configure()
+
     elif args.command == "test":
         _run_test_vectors(args)
 
     else:
         parser.print_help()
+
+
+def _run_configure():
+    """Interactive setup for Lionguard."""
+    import os
+    from pathlib import Path
+
+    print("\n" + "=" * 50)
+    print("  Lionguard Setup")
+    print("=" * 50)
+
+    print("\nHow do you want to run Lionguard?\n")
+    print("  1. LOCAL  — Use your own Ollama/LM Studio model (free, private)")
+    print("  2. CLOUD  — Use Grok 4.1 via xAI API (~$0.001/scan)")
+    print()
+
+    choice = input("Choose [1/2]: ").strip()
+
+    config = {}
+
+    if choice == "2":
+        config["provider"] = "xai"
+        config["model"] = "grok-4-1-fast-reasoning"
+        api_key = input("Enter your xAI API key (from console.x.ai): ").strip()
+        if api_key:
+            config["api_key"] = api_key
+        print("\nGrok 4.1 cloud scanning configured.")
+        print(f"  Cost: ~$0.001 per scan (less than a coffee per day)")
+    else:
+        config["provider"] = "local"
+        base_url = input("Ollama URL [http://127.0.0.1:11434]: ").strip()
+        config["base_url"] = base_url or "http://127.0.0.1:11434"
+        model = input("Model name [llama3.1:8b]: ").strip()
+        config["model"] = model or "llama3.1:8b"
+        print("\nLocal model scanning configured.")
+        print(f"  Cost: $0.00 (everything on your machine)")
+
+    config_dir = Path.home() / ".lionguard"
+    config_dir.mkdir(exist_ok=True)
+    config_path = config_dir / "config.json"
+
+    with open(config_path, 'w') as f:
+        json.dump(config, f, indent=2)
+
+    print(f"\nConfig saved to: {config_path}")
+    print(f"\nTest it: lionguard test --vectors all --provider {config['provider']}")
+    if config["provider"] == "xai":
+        print(f"  (Set XAI_API_KEY in your environment or use lionguard configure)")
+    print()
 
 
 def _run_test_vectors(args):

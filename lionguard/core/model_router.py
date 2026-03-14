@@ -31,6 +31,10 @@ class ModelRouter:
         self.config = config or ModelConfig()
 
     def call(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+        import os
+        if not self.config.api_key:
+            self.config.api_key = os.environ.get("XAI_API_KEY", "")
+
         if self.config.provider == "local":
             return self._call_local(system_prompt, user_prompt)
         elif self.config.provider == "xai":
