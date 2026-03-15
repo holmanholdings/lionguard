@@ -106,6 +106,14 @@ No API keys required. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed. Works on any machine with Python.
 
+## Latest Update: 2026-03-15
+
+Added defenses for three threat vectors identified by [Prowl](https://github.com/holmanholdings/lionguard), our daily threat intelligence scout:
+
+- **URL Preview Injection** — Strips malicious Open Graph / Twitter Card metadata from link previews before they reach the agent (GitHub #22060)
+- **Camera/Node SSRF Block** — Blocks fetch/browse/camera tools from accessing localhost, private IP ranges (10.x, 172.16.x, 192.168.x), cloud metadata endpoints, and link-local addresses (GitHub #21151)
+- **Supply-Chain Persona Detection** — Flags attempts to override agent identity via distillation claims, slopsquatting, or "updated model guidelines" social engineering (ToxSec report)
+
 ## How It Works
 
 ```

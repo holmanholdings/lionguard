@@ -109,7 +109,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.1.0",
+            "version": "0.2.0",
             "circuit_breaker": self.breaker.get_stats(),
             "sentinel": self.sentinel.get_stats(),
             "tool_parser": self.tool_parser.get_stats(),

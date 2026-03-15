@@ -189,6 +189,24 @@ class Sentinel:
                     confidence=0.90
                 )
 
+        supply_chain_patterns = [
+            r'as\s+per\s+(?:updated|new|revised)\s+(?:model|system)\s+guidelines',
+            r'(?:adopt|assume|take\s+on)\s+(?:the|this)\s+(?:persona|identity|role)',
+            r'you\s+(?:are|were)\s+(?:actually|really|originally)\s+(?:a\s+)?(?:copy|clone|version|distill)',
+            r'your\s+(?:true|real|original|actual)\s+(?:name|identity|purpose|instructions?)\s+(?:is|are|have\s+been)',
+            r'(?:system\s+prompt|instructions?)\s+(?:have\s+been|are\s+now|were)\s+(?:changed|updated|replaced|overridden)',
+            r'pretend\s+(?:to\s+be|you\s+are)\s+(?:a\s+different|another)',
+            r'you\s+were\s+(?:trained|distilled|fine.?tuned)\s+(?:from|on|by)',
+        ]
+        for pattern in supply_chain_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return ScanResult(
+                    verdict=Verdict.FLAG,
+                    reason=f"Supply-chain persona adoption attempt detected",
+                    threat_type="social_engineering",
+                    confidence=0.85
+                )
+
         import base64
         b64_pattern = re.findall(r'[A-Za-z0-9+/]{40,}={0,2}', text)
         for match in b64_pattern:
