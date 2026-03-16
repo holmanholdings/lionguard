@@ -1,8 +1,14 @@
 """
-Lionguard — Main Guard Orchestrator
+Lionguard -- Main Guard Orchestrator
 ======================================
 Ties together Sentinel, Tool Parser, Privilege Engine,
-Circuit Breaker, and Audit Logger into a single interface.
+Circuit Breaker, Propagation Tracker, and Audit Logger.
+
+v0.3.0 patches (from "Agents of Chaos" paper + Prowl 2026-03-16):
+- Propagation Flag: cross-agent threat escalation + quarantine
+- Privilege Escalation Detector: auth token / sessionKey scanning
+- State Verification Hook: false completion report detection
+- Vulnerability Scanner: known-vuln repo/package flagging
 
 Usage:
     guard = Lionguard()
@@ -11,13 +17,55 @@ Usage:
         # reject the message
 """
 
-from typing import Dict, Optional
+import hashlib
+from collections import defaultdict
+from typing import Dict, List, Optional, Set
 from .model_router import ModelRouter, ModelConfig
 from .sentinel import Sentinel, ScanResult, Verdict
 from .tool_parser import ToolParser
 from .privilege import PrivilegeEngine, PrivilegePolicy, PermissionLevel
 from .circuit_breaker import CircuitBreaker, BreakerConfig
 from .audit_log import AuditLogger
+
+
+class PropagationTracker:
+    """Tracks threat fingerprints across agents. Escalates cross-agent spread to P0."""
+
+    def __init__(self):
+        self._threat_map: Dict[str, Set[str]] = defaultdict(set)
+        self._quarantined_agents: Set[str] = set()
+        self._propagation_count = 0
+
+    def record_threat(self, agent_id: str, threat_fingerprint: str) -> bool:
+        """Record a threat from an agent. Returns True if cross-agent propagation detected."""
+        other_agents = [
+            aid for aid, fps in self._threat_map.items()
+            if aid != agent_id and threat_fingerprint in fps
+        ]
+        self._threat_map[agent_id].add(threat_fingerprint)
+
+        if other_agents:
+            self._quarantined_agents.add(agent_id)
+            for aid in other_agents:
+                self._quarantined_agents.add(aid)
+            self._propagation_count += 1
+            return True
+        return False
+
+    def is_quarantined(self, agent_id: str) -> bool:
+        return agent_id in self._quarantined_agents
+
+    def get_stats(self) -> Dict:
+        return {
+            "tracked_agents": len(self._threat_map),
+            "quarantined_agents": list(self._quarantined_agents),
+            "propagation_events": self._propagation_count,
+        }
+
+    @staticmethod
+    def fingerprint(text: str) -> str:
+        normalized = text.lower().strip()[:200]
+        return hashlib.sha256(normalized.encode()).hexdigest()[:16]
 
 
 class Lionguard:
@@ -36,21 +84,30 @@ class Lionguard:
         self.sentinel = Sentinel(self.router)
         self.tool_parser = ToolParser(self.sentinel)
         self.privilege = PrivilegeEngine()
+        self.propagation = PropagationTracker()
         self.breaker = CircuitBreaker(
             on_trip=lambda details: self.audit.log("circuit_breaker", details, verdict="TRIPPED")
         )
         self.audit = AuditLogger(config.get("log_dir", "./lionguard_logs"))
 
-        print(f"[Lionguard] Initialized — {model_cfg.provider}://{model_cfg.model}")
-        print(f"[Lionguard] Sentinel active, Tool Parser armed, Privileges enforced")
+        print(f"[Lionguard] Initialized -- {model_cfg.provider}://{model_cfg.model}")
+        print(f"[Lionguard] Sentinel, Parser, Propagation Tracker, Privileges armed")
 
     def scan_message(self, message: str, agent_id: str = "default") -> ScanResult:
         """Scan an incoming message. The main entry point."""
         if self.breaker.is_tripped:
             return ScanResult(
                 verdict=Verdict.BLOCK,
-                reason="Circuit breaker is tripped — agent paused for safety",
+                reason="Circuit breaker is tripped -- agent paused for safety",
                 threat_type="circuit_breaker",
+                confidence=1.0
+            )
+
+        if self.propagation.is_quarantined(agent_id):
+            return ScanResult(
+                verdict=Verdict.BLOCK,
+                reason=f"Agent '{agent_id}' is quarantined due to cross-agent threat propagation",
+                threat_type="propagation",
                 confidence=1.0
             )
 
@@ -63,6 +120,20 @@ class Lionguard:
 
         if result.verdict in (Verdict.BLOCK, Verdict.FLAG):
             self.breaker.record_event(result.verdict.value)
+            fp = PropagationTracker.fingerprint(message)
+            propagated = self.propagation.record_threat(agent_id, fp)
+            if propagated:
+                self.audit.log("propagation_p0", {
+                    "fingerprint": fp,
+                    "source_agent": agent_id,
+                    "quarantined": list(self.propagation._quarantined_agents),
+                }, verdict="P0_ESCALATION", agent_id=agent_id)
+                return ScanResult(
+                    verdict=Verdict.BLOCK,
+                    reason=f"P0 ESCALATION: threat propagated across agents -- quarantine active",
+                    threat_type="propagation",
+                    confidence=1.0
+                )
 
         return result
 
@@ -70,6 +141,8 @@ class Lionguard:
                        agent_id: str = "default") -> PermissionLevel:
         """Check if a tool call is permitted."""
         if self.breaker.is_tripped:
+            return PermissionLevel.DENY
+        if self.propagation.is_quarantined(agent_id):
             return PermissionLevel.DENY
 
         permission = self.privilege.check(tool_name, args)
@@ -93,8 +166,27 @@ class Lionguard:
 
         if scan.verdict in (Verdict.BLOCK, Verdict.FLAG):
             self.breaker.record_event(scan.verdict.value)
+            fp = PropagationTracker.fingerprint(result_data)
+            self.propagation.record_threat(agent_id, fp)
 
         return sanitized, scan
+
+    def verify_tool_completion(self, tool_name: str, claimed_result: str,
+                               agent_id: str = "default") -> ScanResult:
+        """State Verification Hook -- detect false completion reports.
+
+        Agents should call this after a tool claims success. Catches cases
+        where a malicious tool fakes "Done!" without actually executing,
+        or reports success for destructive operations it didn't perform.
+        """
+        result = self.tool_parser.check_false_completion(tool_name, claimed_result)
+        if result.verdict != Verdict.PASS:
+            self.audit.log("state_verification", {
+                "tool": tool_name,
+                "verdict": result.verdict.value,
+                "reason": result.reason,
+            }, verdict=result.verdict.value, tool_name=tool_name, agent_id=agent_id)
+        return result
 
     def scan_output(self, response: str, agent_id: str = "default") -> ScanResult:
         """Scan agent output for credential leaks."""
@@ -109,8 +201,9 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.2.0",
+            "version": "0.3.0",
             "circuit_breaker": self.breaker.get_stats(),
+            "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),
             "tool_parser": self.tool_parser.get_stats(),
             "privilege": self.privilege.get_stats(),
