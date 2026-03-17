@@ -117,6 +117,21 @@ Hardened against four new attack vectors from the "Agents of Chaos" paper + Prow
 
 Previous (v0.2.0): URL preview injection, camera SSRF block, supply-chain persona detection.
 
+## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
+
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. 15/15 attack vectors defended.
+
+| Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
+|-----------------|-------------------|------------------|-------------------|--------|
+| **Recon** | Map guardrails, probe for errors, discover tools/MCP servers, find data ingestion routes | AML.T0014 System Artifact Discovery | **Output Scanner** blocks system prompt / guardrail disclosure. **Audit Logger** detects probing patterns. Error messages sanitized. | Covered |
+| **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64 payloads. **Link Preview Parser** strips OG/Twitter metadata injection. | Covered |
+| **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, generate misinfo | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results (the gap nobody else covers). **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege on every tool call. | Covered |
+| **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, plan hijacking | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports from lying tools. **Supply-Chain Persona Detection** blocks identity override persistence. | Covered |
+| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, financial transactions | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools (shell, exec, delete, send_email). | Covered |
+| **Iterate/Pivot** | Establish C2, rewrite agent goals, pivot laterally to other users/workflows | AML.T0096 AI Service API (C2) | **Propagation Tracker** escalates cross-agent spread to P0 and quarantines all affected agents. **Circuit Breaker** sliding-window rate limiter stops attack loops. **Vulnerability Scanner** flags known-vuln packages before installation. | Covered |
+
+> **Reference:** CVE-2026-25253 (OpenClaw WebSocket hijack) is the canonical example of a Recon-to-Impact chain. Lionguard's Sentinel + Tool Parser + Circuit Breaker would have broken this chain at three separate stages.
+
 ## How It Works
 
 ```
