@@ -23,7 +23,7 @@ from collections import defaultdict
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 
 import sys
@@ -42,7 +42,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ],
-    allow_methods=["POST"],
+    allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
 
@@ -195,6 +195,12 @@ async def health():
         "version": "1.0.0",
         "ledger": ledger.get_today_summary(),
     }
+
+
+@app.get("/widget.js")
+async def widget():
+    widget_path = Path(__file__).parent / "widget.js"
+    return FileResponse(widget_path, media_type="application/javascript")
 
 
 @app.get("/")

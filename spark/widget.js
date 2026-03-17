@@ -7,7 +7,7 @@
  */
 (function() {
   const SPARK_URL = document.currentScript?.getAttribute('data-spark-url') 
-    || 'http://localhost:8100';
+    || 'https://spark-production-d651.up.railway.app';
 
   const STYLES = `
     #spark-widget {
