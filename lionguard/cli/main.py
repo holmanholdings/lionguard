@@ -38,6 +38,12 @@ def main():
     # configure command
     subparsers.add_parser("configure", help="Set up Lionguard (local or cloud)")
 
+    # ledger command
+    ledger_parser = subparsers.add_parser("ledger", help="Cost guardian — track API spending")
+    ledger_parser.add_argument("--status", action="store_true", help="Show current spending status")
+    ledger_parser.add_argument("--budget", type=float, default=5.0, help="Daily budget in USD")
+    ledger_parser.add_argument("--agents", action="store_true", help="Show per-agent breakdown")
+
     # version
     subparsers.add_parser("version", help="Show version")
 
@@ -68,6 +74,20 @@ def main():
 
     elif args.command == "configure":
         _run_configure()
+
+    elif args.command == "ledger":
+        from lionguard.core.ledger import Ledger, LedgerConfig
+        config = LedgerConfig(daily_budget=args.budget)
+        ledger = Ledger(config)
+        print(ledger.format_status())
+        if args.agents:
+            agents = ledger.get_agent_breakdown()
+            providers = ledger.get_provider_breakdown()
+            if providers:
+                print("  Per provider:")
+                for p in providers:
+                    print(f"    {p['provider']:15} {p['calls']:4} calls  ${p['cost']:.4f}")
+                print()
 
     elif args.command == "test":
         _run_test_vectors(args)
