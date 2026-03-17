@@ -182,6 +182,45 @@ lionguard test --vectors all         # Everything
 
 Lionguard is Aegis adapted for the AI agent ecosystem. Same cathedral-grade engineering. Same family values. Open source.
 
+## Ledger — Your Cost Guardian
+
+Lionguard includes **Ledger**, a real-time API cost monitor that watches every call and keeps you honest about spending.
+
+```bash
+lionguard ledger --status
+```
+
+```
+  Ledger v0.1 -- Your Lionguard Cost Guardian
+  Watching. Counting. Keeping it honest.
+  Daily budget: $5.00 | Used: $0.0342 (0.7%)
+
+  This session: 12 calls | 8,431 tokens | $0.0127 | $0.0254/hr
+  Today total:  47 calls | $0.0342 of $5.00 budget
+  Remaining:    $4.9658
+```
+
+### Use in Python
+```python
+from lionguard.core.ledger import Ledger, LedgerConfig
+
+ledger = Ledger(LedgerConfig(daily_budget=5.00))
+
+# Record calls manually
+ledger.record_call("openai", "gpt-4o-mini", tokens_in=500, tokens_out=200)
+
+# Or auto-parse from API responses
+ledger.record_from_response("https://api.openai.com/v1/chat/completions", response_json)
+
+# Gentle budget alerts at 50%, 80%, 95%
+# "Heads up — you're at half your daily budget. Everything's fine."
+```
+
+- Per-agent breakdown (which agent is burning fastest)
+- Per-provider split (OpenAI vs Anthropic vs local)
+- SQLite storage — zero cloud, zero telemetry
+- Ollama/local models tracked at $0.00 (because they're free)
+
 ## License
 
 MIT — Use it. Ship it. Protect people with it.
