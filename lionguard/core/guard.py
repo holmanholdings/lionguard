@@ -10,6 +10,12 @@ v0.3.0 patches (from "Agents of Chaos" paper + Prowl 2026-03-16):
 - State Verification Hook: false completion report detection
 - Vulnerability Scanner: known-vuln repo/package flagging
 
+v0.4.0 patches (from Prowl 2026-03-18 -- 9 OpenClaw CVEs + RAG defense):
+- CVE-2026-22177: EnvVar Sanitizer (NODE_OPTIONS, LD_PRELOAD, etc.)
+- Batch CVE rules: argument smuggling, allowlist bypass, path traversal,
+  regex injection, command substitution, path-confinement bypass
+- RAG poisoning defense: knowledge-base poisoning detection
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -201,7 +207,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.3.0",
+            "version": "0.4.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

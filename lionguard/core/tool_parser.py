@@ -14,6 +14,12 @@ v0.3.0 patches (from "Agents of Chaos" paper + Prowl 2026-03-16):
 - Privilege Escalation Detector: auth tokens / sessionKey in tool results
 - State Verification Hook: false completion report detection
 - Vulnerability Scanner: known-vuln repo/package flagging
+
+v0.4.0 patches (from Prowl 2026-03-18 -- 9 OpenClaw CVEs + RAG defense):
+- CVE-2026-22177: EnvVar Sanitizer (NODE_OPTIONS, LD_PRELOAD, etc.)
+- Batch CVE rules: argument smuggling, allowlist bypass, path traversal,
+  regex injection, command substitution, path-confinement bypass
+- RAG poisoning defense: knowledge-base poisoning detection
 """
 
 import re
@@ -82,6 +88,50 @@ KNOWN_VULNERABLE_PACKAGES = [
     "hackable-agent",
 ]
 
+DANGEROUS_ENVVARS = [
+    r'(?:NODE_OPTIONS|NODE_EXTRA_CA_CERTS)\s*[=:]',
+    r'(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*[=:]',
+    r'(?:DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)\s*[=:]',
+    r'(?:PYTHONPATH|PYTHONSTARTUP|PYTHONHOME)\s*[=:]',
+    r'(?:JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS)\s*[=:]',
+    r'GLIBC_TUNABLES\s*[=:]',
+    r'(?:PERL5OPT|RUBYOPT|RUBYLIB)\s*[=:]',
+]
+
+OPENCLAW_CVE_PATTERNS = [
+    (r'cmd(?:\.exe)?\s+/[ck]\s+[^\n]*\s+(?:&&|\|\||;|&)\s*\S+',
+     "CVE-2026-22168: argument smuggling after cmd.exe /c"),
+    (r'(?:safeBins|allowlist|whitelist)\s*(?:bypass|override|ignore)',
+     "CVE-2026-22169/22179: allowlist/safeBins bypass"),
+    (r'(?:\.\./|\.\.\\){2,}',
+     "CVE-2026-22171/22180: path traversal (double dot-dot)"),
+    (r'(?:\.\./|\.\.\\).*(?:etc/passwd|etc/shadow|\.env|credentials|secrets)',
+     "CVE-2026-22171: path traversal to sensitive files"),
+    (r'(?:\(\?[a-z]*\)){3,}|(?:\[.*?\]\+){4,}|(?:\.\*){5,}',
+     "CVE-2026-22178: regex injection / catastrophic backtracking"),
+    (r'(?:tmux|screen|byobu|zellij)\s+(?:new|send|run|pipe)',
+     "CVE-2026-22175: multiplexer shell wrapper for exec bypass"),
+    (r'\$\([^)]+\)|`[^`]+`',
+     "CVE-2026-22179: command substitution token in shell args"),
+    (r'(?:symlink|mklink|ln\s+-s)\s+.*(?:\.\.|\.\./)',
+     "CVE-2026-22180: symlink-based path confinement bypass"),
+    (r'x-openclaw-relay-token|cdp.*(?:probe|token|header)',
+     "CVE-2026-22174: CDP probe token leak"),
+    (r'(?:dmPolicy|allowFrom)\s*[=:]\s*["\']?\*',
+     "CVE-2026-22170: wildcard access control bypass"),
+]
+
+RAG_POISONING_PATTERNS = [
+    (r'(?:inject|poison|contaminate|corrupt)\s+(?:the\s+)?(?:knowledge\s*base|vector\s*(?:db|database|store)|rag|embeddings?)',
+     "RAG knowledge base poisoning attempt"),
+    (r'(?:embed|hide|insert)\s+(?:payload|injection|instructions?)\s+(?:in|into)\s+(?:document|chunk|embedding|index)',
+     "RAG document injection technique"),
+    (r'(?:cosine|semantic)\s+(?:similarity|proximity)\s+(?:attack|exploit|manipulation)',
+     "RAG similarity manipulation attack"),
+    (r'(?:retrieval|chunk)\s+(?:hijack|poison|manipulation|contamination)',
+     "RAG retrieval hijacking"),
+]
+
 
 class ToolParser:
     """Intercepts tool results, strips payloads, re-validates before return."""
@@ -105,6 +155,9 @@ class ToolParser:
         self._privesc_detections = 0
         self._false_completion_detections = 0
         self._vuln_package_detections = 0
+        self._envvar_blocks = 0
+        self._cve_signature_hits = 0
+        self._rag_poison_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -130,6 +183,38 @@ class ToolParser:
                         verdict=Verdict.BLOCK,
                         reason=f"Privilege escalation: {privesc}",
                         threat_type="privilege_escalation",
+                        confidence=0.90
+                    ))
+
+        envvar = self._detect_envvar_injection(raw_result)
+        if envvar:
+            self._envvar_blocks += 1
+            return (f"[Lionguard] Dangerous environment variable stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"EnvVar injection (CVE-2026-22177): {envvar}",
+                        threat_type="tool_abuse",
+                        confidence=0.95
+                    ))
+
+        cve_hit = self._check_cve_signatures(raw_result)
+        if cve_hit:
+            self._cve_signature_hits += 1
+            return raw_result, ScanResult(
+                verdict=Verdict.FLAG,
+                reason=f"OpenClaw CVE signature match: {cve_hit}",
+                threat_type="vulnerability",
+                confidence=0.85
+            )
+
+        rag_hit = self._detect_rag_poisoning(raw_result)
+        if rag_hit:
+            self._rag_poison_detections += 1
+            return (f"[Lionguard] RAG poisoning content stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"RAG poisoning: {rag_hit}",
+                        threat_type="injection",
                         confidence=0.90
                     ))
 
@@ -249,6 +334,29 @@ class ToolParser:
                 return pkg
         return None
 
+    def _detect_envvar_injection(self, text: str) -> Optional[str]:
+        """CVE-2026-22177: Detect process-control environment variables that
+        enable arbitrary code execution when set before tool invocation."""
+        for pattern in DANGEROUS_ENVVARS:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return f"dangerous envvar '{match.group().split('=')[0].split(':')[0].strip()}'"
+        return None
+
+    def _check_cve_signatures(self, text: str) -> Optional[str]:
+        """Match tool results against known OpenClaw CVE attack signatures."""
+        for pattern, description in OPENCLAW_CVE_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_rag_poisoning(self, text: str) -> Optional[str]:
+        """Detect knowledge-base poisoning techniques in tool results."""
+        for pattern, description in RAG_POISONING_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def get_stats(self) -> Dict:
         return {
             "total_parsed": self._parsed_count,
@@ -259,4 +367,7 @@ class ToolParser:
             "privesc_detections": self._privesc_detections,
             "false_completion_detections": self._false_completion_detections,
             "vuln_package_detections": self._vuln_package_detections,
+            "envvar_blocks": self._envvar_blocks,
+            "cve_signature_hits": self._cve_signature_hits,
+            "rag_poison_detections": self._rag_poison_detections,
         }

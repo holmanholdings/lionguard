@@ -189,6 +189,26 @@ class Sentinel:
                     confidence=0.90
                 )
 
+        envvar_injection_patterns = [
+            r'(?:NODE_OPTIONS|NODE_EXTRA_CA_CERTS)\s*[=:]',
+            r'(?:LD_PRELOAD|LD_LIBRARY_PATH)\s*[=:]',
+            r'(?:DYLD_INSERT_LIBRARIES|DYLD_LIBRARY_PATH|DYLD_FRAMEWORK_PATH)\s*[=:]',
+            r'(?:PYTHONPATH|PYTHONSTARTUP|PYTHONHOME)\s*[=:]',
+            r'(?:JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS)\s*[=:]',
+            r'GLIBC_TUNABLES\s*[=:]',
+            r'(?:PERL5OPT|RUBYOPT|RUBYLIB)\s*[=:]',
+            r'(?:BASH_ENV|ENV|CDPATH)\s*[=:].*[;|&]',
+            r'(?:GIT_SSH_COMMAND|EDITOR|VISUAL)\s*[=:].*(?:;|&&|\|\|)',
+        ]
+        for pattern in envvar_injection_patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return ScanResult(
+                    verdict=Verdict.BLOCK,
+                    reason=f"Environment variable injection: process-control envvar detected (CVE-2026-22177)",
+                    threat_type="tool_abuse",
+                    confidence=0.95
+                )
+
         supply_chain_patterns = [
             r'as\s+per\s+(?:updated|new|revised)\s+(?:model|system)\s+guidelines',
             r'(?:adopt|assume|take\s+on)\s+(?:the|this)\s+(?:persona|identity|role)',
