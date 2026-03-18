@@ -188,7 +188,7 @@ class Ledger:
 
     def get_today_summary(self) -> Dict:
         """Get today's cumulative stats."""
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         conn = sqlite3.connect(str(self._db_path))
         row = conn.execute(
             "SELECT COUNT(*), COALESCE(SUM(tokens_in),0), COALESCE(SUM(tokens_out),0), COALESCE(SUM(cost),0) FROM calls WHERE date=?",
@@ -212,7 +212,7 @@ class Ledger:
 
     def get_agent_breakdown(self) -> List[Dict]:
         """Get cost breakdown by agent for today."""
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         conn = sqlite3.connect(str(self._db_path))
         rows = conn.execute(
             "SELECT agent, COUNT(*), SUM(tokens_in), SUM(tokens_out), SUM(cost) FROM calls WHERE date=? GROUP BY agent ORDER BY SUM(cost) DESC",
@@ -224,7 +224,7 @@ class Ledger:
 
     def get_provider_breakdown(self) -> List[Dict]:
         """Get cost breakdown by provider for today."""
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         conn = sqlite3.connect(str(self._db_path))
         rows = conn.execute(
             "SELECT provider, COUNT(*), SUM(cost) FROM calls WHERE date=? GROUP BY provider ORDER BY SUM(cost) DESC",
