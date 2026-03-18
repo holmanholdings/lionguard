@@ -1,0 +1,26 @@
+{
+  "channels": {
+    "discord": {
+      "enabled": true,
+      "requireMention": true
+    },
+    "telegram": {
+      "enabled": true
+    },
+    "email": {
+      "enabled": true
+    }
+  },
+  "bindings": [
+    {
+      "agentId": "harbor",
+      "match": {
+        "channel": "*"
+      }
+    }
+  ],
+  "lionguard": {
+    "proxy": true,
+    "interceptToolResults": true
+  }
+}
