@@ -731,7 +731,11 @@ class DenApp:
                     if r.status_code == 200:
                         models = [m["name"] for m in r.json().get("models", [])]
                         found = model in models
-                        msg = f"Connected! {'Model found.' if found else f'Model \"{model}\" not found. Available: {models[:3]}'}"
+                        if found:
+                            msg = "Connected! Model found."
+                        else:
+                            avail = ", ".join(models[:3])
+                            msg = "Connected! Model '{}' not found. Available: {}".format(model, avail)
                         color = COLORS["status_green"] if found else COLORS["status_amber"]
                     else:
                         msg = f"Ollama responded with {r.status_code}"
