@@ -109,10 +109,10 @@ Sign messages with: 🦞 Coral"""
 
 STRIPE_SECRET = os.environ.get("STRIPE_SECRET_KEY", "")
 STRIPE_PRICES = {
-    "harbor": os.environ.get("STRIPE_PRICE_HARBOR", "price_1TCUO5A60ZBWt9KnWqB8HzFu"),
-    "tide": os.environ.get("STRIPE_PRICE_TIDE", "price_1TCUScA60ZBWt9KnCt9nkM5R"),
-    "depth": os.environ.get("STRIPE_PRICE_DEPTH", "price_1TCUUbA60ZBWt9KnpCQZeyYu"),
-    "den-pro": os.environ.get("STRIPE_PRICE_DEN_PRO", "price_1TCUvtA60ZBWt9KnPJJbxOOx"),
+    "harbor": os.environ.get("STRIPE_PRICE_HARBOR", "price_1TCi5jPPxVvNB3DPNoAiBY0n"),
+    "tide": os.environ.get("STRIPE_PRICE_TIDE", "price_1TCi5jPPxVvNB3DPpvD9yvxD"),
+    "depth": os.environ.get("STRIPE_PRICE_DEPTH", "price_1TCi5kPPxVvNB3DPypcBxgi1"),
+    "den-pro": os.environ.get("STRIPE_PRICE_DEN_PRO", "price_1TCi5kPPxVvNB3DPGR1O7l4A"),
 }
 SUCCESS_URL = "https://awakened-intelligence.com/forge/success?package={package}&license={license}"
 CANCEL_URL = "https://awakened-intelligence.com/forge"
