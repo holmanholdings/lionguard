@@ -20,6 +20,12 @@ from pathlib import Path
 from typing import Optional
 
 try:
+    import requests as _requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
+try:
     import customtkinter as ctk
     CTK_AVAILABLE = True
 except ImportError:
@@ -82,6 +88,49 @@ def save_config(cfg: dict):
     CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
 
+FLEET = {
+    "Spark": {"url": "https://spark-production-d651.up.railway.app", "emoji": "🦞⚡"},
+    "Coral": {"url": "https://coral-production.up.railway.app", "emoji": "🦞🔨"},
+    "Bubba": {"url": "https://bubba-production.up.railway.app", "emoji": "🦞📣"},
+}
+
+
+def fetch_fleet_status() -> dict:
+    statuses = {}
+    if not REQUESTS_AVAILABLE:
+        return statuses
+    for name, info in FLEET.items():
+        try:
+            r = _requests.get(f"{info['url']}/health", timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                ledger = data.get("ledger", {})
+                statuses[name] = {
+                    "status": "online",
+                    "emoji": info["emoji"],
+                    "calls": ledger.get("total_calls", 0),
+                    "cost": ledger.get("total_cost", 0),
+                    "budget_pct": ledger.get("budget_used_pct", 0),
+                }
+            else:
+                statuses[name] = {"status": "error", "emoji": info["emoji"]}
+        except Exception:
+            statuses[name] = {"status": "offline", "emoji": info["emoji"]}
+    return statuses
+
+
+def fetch_bubba_drafts() -> str:
+    if not REQUESTS_AVAILABLE:
+        return "Install requests: pip install requests"
+    try:
+        r = _requests.get(f"{FLEET['Bubba']['url']}/drafts/latest", timeout=5)
+        if r.status_code == 200:
+            return r.json().get("content", "No drafts yet")
+    except Exception:
+        return "Could not reach Bubba"
+    return "No drafts available"
+
+
 class DenApp:
     """The Den — your lobsters' living room."""
 
@@ -128,10 +177,12 @@ class DenApp:
         self.has_license = check_license()
 
         self.tabview.add("Dashboard")
+        self.tabview.add("Drafts")
         self.tabview.add("Chat")
         self.tabview.add("Settings")
 
         self._build_dashboard_tab()
+        self._build_drafts_tab()
         self._build_chat_tab()
         self._build_settings_tab()
 
@@ -229,6 +280,110 @@ class DenApp:
                                          font=ctk.CTkFont(size=12),
                                          text_color=COLORS["status_green"])
         self.scan_result.pack(side="left", padx=15)
+
+        fleet_frame = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"],
+                                    corner_radius=12, border_width=1,
+                                    border_color=COLORS["border"])
+        fleet_frame.pack(fill="x", padx=10, pady=4)
+
+        ctk.CTkLabel(fleet_frame, text="Lobster Fleet (Railway)",
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     text_color=COLORS["text_primary"]).pack(padx=12, pady=(8, 4), anchor="w")
+
+        self.fleet_list = ctk.CTkLabel(fleet_frame, text="  Checking fleet...",
+                                        font=ctk.CTkFont(family="Consolas", size=11),
+                                        text_color=COLORS["text_secondary"],
+                                        justify="left")
+        self.fleet_list.pack(padx=12, pady=(0, 8), anchor="w")
+
+    # ── Drafts Tab ──
+
+    def _build_drafts_tab(self):
+        tab = self.tabview.tab("Drafts")
+
+        header = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"], corner_radius=8)
+        header.pack(fill="x", padx=10, pady=(5, 4))
+
+        ctk.CTkLabel(header, text="🦞📣 Bubba's Drafts",
+                     font=ctk.CTkFont(size=14, weight="bold"),
+                     text_color=COLORS["text_primary"]).pack(side="left", padx=12, pady=8)
+
+        self.drafts_refresh_btn = ctk.CTkButton(header, text="Refresh", width=70,
+                                                 font=ctk.CTkFont(size=11, weight="bold"),
+                                                 fg_color=COLORS["accent_cool"],
+                                                 hover_color="#0891b2",
+                                                 text_color=COLORS["bg_deep"],
+                                                 corner_radius=6,
+                                                 command=self._refresh_drafts)
+        self.drafts_refresh_btn.pack(side="right", padx=12, pady=8)
+
+        self.drafts_display = ctk.CTkTextbox(tab, fg_color=COLORS["bg_card"],
+                                              text_color=COLORS["text_secondary"],
+                                              font=ctk.CTkFont(family="Consolas", size=11),
+                                              border_width=1, border_color=COLORS["border"],
+                                              corner_radius=8, wrap="word",
+                                              state="disabled")
+        self.drafts_display.pack(fill="both", expand=True, padx=10, pady=4)
+
+        gen_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        gen_frame.pack(fill="x", padx=10, pady=(4, 6))
+
+        self.gen_topic = ctk.CTkEntry(gen_frame, placeholder_text="Topic (optional)...",
+                                       fg_color=COLORS["bg_card"],
+                                       border_color=COLORS["border"],
+                                       text_color=COLORS["text_primary"],
+                                       font=ctk.CTkFont(size=12),
+                                       corner_radius=8)
+        self.gen_topic.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        self.gen_btn = ctk.CTkButton(gen_frame, text="Generate New", width=110,
+                                      font=ctk.CTkFont(size=12, weight="bold"),
+                                      fg_color=COLORS["accent_warm"],
+                                      hover_color="#ea580c",
+                                      text_color="white",
+                                      corner_radius=8,
+                                      command=self._generate_drafts)
+        self.gen_btn.pack(side="right")
+
+        self.root.after(1000, self._refresh_drafts)
+
+    def _refresh_drafts(self):
+        def do_fetch():
+            content = fetch_bubba_drafts()
+            self.root.after(0, lambda: self._set_drafts_text(content))
+
+        threading.Thread(target=do_fetch, daemon=True).start()
+
+    def _set_drafts_text(self, text: str):
+        self.drafts_display.configure(state="normal")
+        self.drafts_display.delete("1.0", "end")
+        self.drafts_display.insert("1.0", text)
+        self.drafts_display.configure(state="disabled")
+
+    def _generate_drafts(self):
+        self.gen_btn.configure(state="disabled", text="Generating...")
+        topic = self.gen_topic.get().strip()
+
+        def do_gen():
+            if not REQUESTS_AVAILABLE:
+                self.root.after(0, lambda: self.gen_btn.configure(state="normal", text="Generate New"))
+                return
+            try:
+                body = {"platform": "both", "count": 3}
+                if topic:
+                    body["topic"] = topic
+                r = _requests.post(
+                    f"{FLEET['Bubba']['url']}/generate",
+                    json=body, timeout=30
+                )
+                if r.status_code == 200:
+                    self.root.after(0, self._refresh_drafts)
+            except Exception as e:
+                print(f"[Den] Generate error: {e}")
+            finally:
+                self.root.after(0, lambda: self.gen_btn.configure(state="normal", text="Generate New"))
+
+        threading.Thread(target=do_gen, daemon=True).start()
 
     # ── Chat Tab ──
 
@@ -686,6 +841,31 @@ class DenApp:
 
         except Exception as e:
             print(f"[Den] Refresh error: {e}")
+
+        try:
+            fleet = fetch_fleet_status()
+            if fleet:
+                lines = []
+                total_calls = 0
+                total_cost = 0.0
+                for name, info in fleet.items():
+                    if info["status"] == "online":
+                        calls = info.get("calls", 0)
+                        cost = info.get("cost", 0)
+                        total_calls += calls
+                        total_cost += cost
+                        lines.append(f"  {info['emoji']} {name:10} online   {calls:3} calls  ${cost:.4f}")
+                    elif info["status"] == "offline":
+                        lines.append(f"  {info['emoji']} {name:10} offline")
+                    else:
+                        lines.append(f"  {info['emoji']} {name:10} error")
+                if total_calls > 0:
+                    lines.append(f"  {'':13} total:  {total_calls:3} calls  ${total_cost:.4f}")
+                self.fleet_list.configure(text="\n".join(lines))
+            else:
+                self.fleet_list.configure(text="  Install requests: pip install requests")
+        except Exception as e:
+            print(f"[Den] Fleet refresh error: {e}")
 
     def _start_refresh(self):
         def loop():
