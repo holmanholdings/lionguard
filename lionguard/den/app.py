@@ -599,6 +599,7 @@ class DenApp:
             selected_color=COLORS["accent_cool"],
             unselected_color=COLORS["bg_card_hover"])
         self.provider_menu.pack(side="left", fill="x", expand=True)
+        self.provider_var.trace_add("write", lambda *_: self._on_provider_change())
 
         # API Key
         row2 = ctk.CTkFrame(settings_frame, fg_color="transparent")
@@ -697,6 +698,19 @@ class DenApp:
                                              font=ctk.CTkFont(size=12),
                                              text_color=COLORS["status_green"])
         self.settings_status.pack(padx=15, pady=(4, 0), anchor="w")
+
+    def _on_provider_change(self):
+        provider = self.provider_var.get()
+        defaults = {
+            "local": {"model": "llama3.1:8b", "url": "http://127.0.0.1:11434"},
+            "xai": {"model": "grok-4-1-fast-reasoning", "url": ""},
+            "openai": {"model": "gpt-4o-mini", "url": ""},
+        }
+        d = defaults.get(provider, defaults["local"])
+        self.model_entry.delete(0, "end")
+        self.model_entry.insert(0, d["model"])
+        self.url_entry.delete(0, "end")
+        self.url_entry.insert(0, d["url"])
 
     def _toggle_key_visibility(self):
         if self.show_key_var.get():
