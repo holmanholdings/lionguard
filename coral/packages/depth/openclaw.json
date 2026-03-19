@@ -1,0 +1,14 @@
+{
+  "bindings": [
+    {
+      "agentId": "depth",
+      "match": {
+        "channel": "*"
+      }
+    }
+  ],
+  "lionguard": {
+    "proxy": true,
+    "interceptToolResults": true
+  }
+}
