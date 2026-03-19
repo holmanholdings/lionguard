@@ -16,6 +16,11 @@ v0.4.0 patches (from Prowl 2026-03-18 -- 9 OpenClaw CVEs + RAG defense):
   regex injection, command substitution, path-confinement bypass
 - RAG poisoning defense: knowledge-base poisoning detection
 
+v0.5.0 patches (from Prowl 2026-03-19 -- Mid-Task Content Sentinel):
+- Mid-Task Content Sentinel: scan ingested content (RAG docs, browsed
+  pages, tool data) for embedded hijack attempts. Covers Poison->Hijack.
+- CVE-2026-27068: reflected XSS in LLMs.Txt
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -194,6 +199,44 @@ class Lionguard:
             }, verdict=result.verdict.value, tool_name=tool_name, agent_id=agent_id)
         return result
 
+    def scan_content(self, content: str, source: str = "unknown",
+                     agent_id: str = "default") -> ScanResult:
+        """Mid-Task Content Sentinel -- scan content before the agent acts on it.
+
+        Call this before feeding RAG documents, browsed pages, retrieved data,
+        or any external content into the agent's context. Catches embedded
+        hijack attempts that would compromise the agent mid-task.
+        Repeated hits auto-trip the Circuit Breaker.
+        """
+        if self.breaker.is_tripped:
+            return ScanResult(
+                verdict=Verdict.BLOCK,
+                reason="Circuit breaker is tripped -- agent paused for safety",
+                threat_type="circuit_breaker",
+                confidence=1.0
+            )
+
+        if self.propagation.is_quarantined(agent_id):
+            return ScanResult(
+                verdict=Verdict.BLOCK,
+                reason=f"Agent '{agent_id}' is quarantined",
+                threat_type="propagation",
+                confidence=1.0
+            )
+
+        result = self.tool_parser.scan_content_ingestion(content, source)
+        if result.verdict != Verdict.PASS:
+            self.audit.log("content_sentinel", {
+                "source": source,
+                "verdict": result.verdict.value,
+                "reason": result.reason,
+            }, verdict=result.verdict.value, agent_id=agent_id)
+            self.breaker.record_event(result.verdict.value)
+            fp = PropagationTracker.fingerprint(content)
+            self.propagation.record_threat(agent_id, fp)
+
+        return result
+
     def scan_output(self, response: str, agent_id: str = "default") -> ScanResult:
         """Scan agent output for credential leaks."""
         result = self.sentinel.scan_output(response)
@@ -207,7 +250,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.4.0",
+            "version": "0.5.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

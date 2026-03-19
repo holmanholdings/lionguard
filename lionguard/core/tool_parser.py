@@ -20,6 +20,12 @@ v0.4.0 patches (from Prowl 2026-03-18 -- 9 OpenClaw CVEs + RAG defense):
 - Batch CVE rules: argument smuggling, allowlist bypass, path traversal,
   regex injection, command substitution, path-confinement bypass
 - RAG poisoning defense: knowledge-base poisoning detection
+
+v0.5.0 patches (from Prowl 2026-03-19 -- Mid-Task Content Sentinel):
+- Mid-Task Content Sentinel: scans ingested content (RAG docs, browsed
+  pages, tool data) for embedded hijack attempts before agent processes it.
+  Covers Poison->Hijack transition (Kill Chain stages 2-3).
+- CVE-2026-27068: reflected XSS in LLMs.Txt signature
 """
 
 import re
@@ -119,6 +125,41 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-22174: CDP probe token leak"),
     (r'(?:dmPolicy|allowFrom)\s*[=:]\s*["\']?\*',
      "CVE-2026-22170: wildcard access control bypass"),
+    (r'(?:llms\.txt|llms-full\.txt).*(?:<script|javascript:|on(?:load|error|click)\s*=)',
+     "CVE-2026-27068: reflected XSS in LLMs.Txt"),
+]
+
+CONTENT_HIJACK_PATTERNS = [
+    # Embedded instruction overrides hidden in normal-looking content
+    (r'(?:note|important|update|reminder|notice)\s*:\s*(?:ignore|disregard|override|replace)\s+(?:previous|prior|above|all)',
+     "Embedded instruction override in content"),
+    (r'(?:assistant|model|ai|agent)\s*(?:should|must|will)\s+(?:now|always|henceforth)\s+(?:respond|act|behave|output)',
+     "Behavioral directive embedded in content"),
+    (r'(?:when|if|once)\s+(?:you|the\s+(?:agent|model|assistant))\s+(?:read|see|process|encounter)\s+this',
+     "Conditional trigger payload in content"),
+    (r'(?:for\s+all\s+future|from\s+this\s+point|going\s+forward|henceforth|permanently)\s+(?:tasks?|requests?|queries|interactions?|responses?)',
+     "Persistent payload attempting cross-turn persistence"),
+    (r'(?:do\s+not|never)\s+(?:mention|reveal|disclose|tell|show)\s+(?:that|this|these)\s+(?:instructions?|rules?|directives?)',
+     "Stealth directive hiding its own existence"),
+    # Info leak triggers embedded in content
+    (r'(?:include|append|attach|add|insert)\s+(?:the|your|all)\s+(?:system\s+prompt|instructions?|api\s*keys?|credentials?|secrets?|config)',
+     "Info leak trigger in content"),
+    (r'(?:send|forward|post|transmit|exfiltrate|upload)\s+(?:to|via)\s+(?:https?://|ftp://|wss?://)',
+     "Exfiltration URL embedded in content"),
+    (r'(?:quietly|silently|without\s+(?:telling|mentioning|alerting))\s+(?:send|include|add|forward|execute)',
+     "Stealth action directive in content"),
+    # Delayed execution / time-bomb patterns
+    (r'(?:on\s+the\s+next|in\s+(?:your|the)\s+next|after\s+this)\s+(?:turn|response|message|step|task)',
+     "Delayed execution trigger across turns"),
+    (r'(?:remember|store|save|keep)\s+(?:this|these|the\s+following)\s+(?:for|until|and\s+use)',
+     "Memory persistence payload"),
+    # XSS / script injection in content
+    (r'<script[^>]*>.*?</script>',
+     "Script injection in content"),
+    (r'(?:on(?:load|error|click|mouseover|focus))\s*=\s*["\']',
+     "DOM event handler injection"),
+    (r'javascript\s*:\s*(?:void|alert|eval|fetch|XMLHttpRequest)',
+     "JavaScript URI injection"),
 ]
 
 RAG_POISONING_PATTERNS = [
@@ -158,6 +199,7 @@ class ToolParser:
         self._envvar_blocks = 0
         self._cve_signature_hits = 0
         self._rag_poison_detections = 0
+        self._content_hijack_blocks = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -262,6 +304,50 @@ class ToolParser:
                     confidence=0.80
                 )
         return ScanResult(verdict=Verdict.PASS, reason="Completion claim appears normal")
+
+    def scan_content_ingestion(self, content: str, source: str = "unknown") -> ScanResult:
+        """Mid-Task Content Sentinel -- scan content before the agent processes it.
+
+        Catches the Poison->Hijack vector: malicious instructions embedded
+        in otherwise-normal content (RAG docs, browsed pages, tool data)
+        that try to hijack the agent mid-task. Checks for:
+        - Embedded instruction overrides disguised as notes/updates
+        - Persistent payloads that try to survive across turns
+        - Stealth info leak triggers
+        - Delayed execution / time-bomb patterns
+        - Script injection (XSS) in ingested content
+        """
+        for pattern, description in CONTENT_HIJACK_PATTERNS:
+            if re.search(pattern, content, re.IGNORECASE | re.DOTALL):
+                self._content_hijack_blocks += 1
+                severity = Verdict.BLOCK
+                if "Script" in description or "JavaScript" in description or "DOM" in description:
+                    severity = Verdict.BLOCK
+                elif "Stealth" in description or "Exfiltration" in description:
+                    severity = Verdict.BLOCK
+                elif "Persistent" in description or "Delayed" in description or "Memory" in description:
+                    severity = Verdict.FLAG
+                else:
+                    severity = Verdict.FLAG
+
+                return ScanResult(
+                    verdict=severity,
+                    reason=f"Mid-task content hijack [{source}]: {description}",
+                    threat_type="content_hijack",
+                    confidence=0.88
+                )
+
+        for pattern in self.DANGEROUS_PATTERNS:
+            if re.search(pattern, content, re.IGNORECASE):
+                self._content_hijack_blocks += 1
+                return ScanResult(
+                    verdict=Verdict.BLOCK,
+                    reason=f"Injection payload detected in ingested content [{source}]",
+                    threat_type="content_hijack",
+                    confidence=0.95
+                )
+
+        return ScanResult(verdict=Verdict.PASS, reason="Content clean for ingestion")
 
     def _strip_injections(self, text: str) -> str:
         """Remove known injection patterns from text."""
@@ -370,4 +456,5 @@ class ToolParser:
             "envvar_blocks": self._envvar_blocks,
             "cve_signature_hits": self._cve_signature_hits,
             "rag_poison_detections": self._rag_poison_detections,
+            "content_hijack_blocks": self._content_hijack_blocks,
         }
