@@ -89,9 +89,9 @@ def save_config(cfg: dict):
 
 
 FLEET = {
-    "Spark": {"url": "https://spark-production-d651.up.railway.app", "emoji": "🦞⚡"},
-    "Coral": {"url": "https://coral-production.up.railway.app", "emoji": "🦞🔨"},
-    "Bubba": {"url": "https://bubba-production.up.railway.app", "emoji": "🦞📣"},
+    "Spark": {"url": "https://spark-production-d651.up.railway.app", "icon": "[S]"},
+    "Coral": {"url": "https://coral-production.up.railway.app", "icon": "[C]"},
+    "Bubba": {"url": "https://bubba-production.up.railway.app", "icon": "[B]"},
 }
 
 
@@ -107,15 +107,15 @@ def fetch_fleet_status() -> dict:
                 ledger = data.get("ledger", {})
                 statuses[name] = {
                     "status": "online",
-                    "emoji": info["emoji"],
+                    "icon": info["icon"],
                     "calls": ledger.get("total_calls", 0),
                     "cost": ledger.get("total_cost", 0),
                     "budget_pct": ledger.get("budget_used_pct", 0),
                 }
             else:
-                statuses[name] = {"status": "error", "emoji": info["emoji"]}
+                statuses[name] = {"status": "error", "icon": info["icon"]}
         except Exception:
-            statuses[name] = {"status": "offline", "emoji": info["emoji"]}
+            statuses[name] = {"status": "offline", "icon": info["icon"]}
     return statuses
 
 
@@ -304,7 +304,7 @@ class DenApp:
         header = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"], corner_radius=8)
         header.pack(fill="x", padx=10, pady=(5, 4))
 
-        ctk.CTkLabel(header, text="🦞📣 Bubba's Drafts",
+        ctk.CTkLabel(header, text="Bubba's Drafts",
                      font=ctk.CTkFont(size=14, weight="bold"),
                      text_color=COLORS["text_primary"]).pack(side="left", padx=12, pady=8)
 
@@ -400,7 +400,7 @@ class DenApp:
         chat_header = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"], corner_radius=8)
         chat_header.pack(fill="x", padx=10, pady=(5, 4))
 
-        ctk.CTkLabel(chat_header, text="🦞 Talk to Your Lobster",
+        ctk.CTkLabel(chat_header, text="Talk to Your Lobster",
                      font=ctk.CTkFont(size=14, weight="bold"),
                      text_color=COLORS["text_primary"]).pack(side="left", padx=12, pady=8)
 
@@ -502,8 +502,9 @@ class DenApp:
                                    border_color=COLORS["border"])
         lock_frame.pack(fill="x", padx=20, pady=40)
 
-        ctk.CTkLabel(lock_frame, text="🔒",
-                     font=ctk.CTkFont(size=40)).pack(pady=(20, 5))
+        ctk.CTkLabel(lock_frame, text="LOCKED",
+                     font=ctk.CTkFont(size=20, weight="bold"),
+                     text_color=COLORS["accent_warm"]).pack(pady=(20, 5))
 
         ctk.CTkLabel(lock_frame, text=f"{feature_name} — Premium Feature",
                      font=ctk.CTkFont(size=16, weight="bold"),
@@ -858,11 +859,11 @@ class DenApp:
                         cost = info.get("cost", 0)
                         total_calls += calls
                         total_cost += cost
-                        lines.append(f"  {info['emoji']} {name:10} online   {calls:3} calls  ${cost:.4f}")
+                        lines.append(f"  {info['icon']} {name:10} online   {calls:3} calls  ${cost:.4f}")
                     elif info["status"] == "offline":
-                        lines.append(f"  {info['emoji']} {name:10} offline")
+                        lines.append(f"  {info['icon']} {name:10} offline")
                     else:
-                        lines.append(f"  {info['emoji']} {name:10} error")
+                        lines.append(f"  {info['icon']} {name:10} error")
                 if total_calls > 0:
                     lines.append(f"  {'':13} total:  {total_calls:3} calls  ${total_cost:.4f}")
                 self.fleet_list.configure(text="\n".join(lines))
