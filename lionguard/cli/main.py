@@ -44,6 +44,11 @@ def main():
     ledger_parser.add_argument("--budget", type=float, default=5.0, help="Daily budget in USD")
     ledger_parser.add_argument("--agents", action="store_true", help="Show per-agent breakdown")
 
+    # den command
+    den_parser = subparsers.add_parser("den", help="Launch The Den desktop dashboard")
+    den_parser.add_argument("--db", default="./lionguard_ledger.db", help="Ledger database path")
+    den_parser.add_argument("--budget", type=float, default=5.0, help="Daily budget")
+
     # version
     subparsers.add_parser("version", help="Show version")
 
@@ -91,6 +96,11 @@ def main():
 
     elif args.command == "test":
         _run_test_vectors(args)
+
+    elif args.command == "den":
+        from lionguard.den.app import DenApp
+        app = DenApp(ledger_db=args.db, daily_budget=args.budget)
+        app.run()
 
     else:
         parser.print_help()
