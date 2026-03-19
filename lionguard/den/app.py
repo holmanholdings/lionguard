@@ -404,10 +404,15 @@ class DenApp:
                      font=ctk.CTkFont(size=14, weight="bold"),
                      text_color=COLORS["text_primary"]).pack(side="left", padx=12, pady=8)
 
-        self.chat_status = ctk.CTkLabel(chat_header, text="Ready",
-                                         font=ctk.CTkFont(size=11),
-                                         text_color=COLORS["status_green"])
-        self.chat_status.pack(side="right", padx=12, pady=8)
+        self.chat_lobster_var = ctk.StringVar(value="Spark")
+        self.chat_lobster_menu = ctk.CTkSegmentedButton(
+            chat_header, values=["Spark", "Coral", "Bubba"],
+            variable=self.chat_lobster_var,
+            font=ctk.CTkFont(size=11),
+            fg_color=COLORS["bg_deep"],
+            selected_color=COLORS["accent_cool"],
+            unselected_color=COLORS["bg_card_hover"])
+        self.chat_lobster_menu.pack(side="right", padx=12, pady=8)
 
         self.chat_display = ctk.CTkTextbox(tab, fg_color=COLORS["bg_card"],
                                             text_color=COLORS["text_secondary"],
@@ -438,7 +443,7 @@ class DenApp:
                                             command=self._send_chat)
         self.chat_send_btn.pack(side="right")
 
-        self._chat_append("system", "Welcome to The Den chat. Type a message to talk to your lobster.\nMake sure OpenClaw is running: openclaw agent --agent <name>\n")
+        self._chat_append("system", "Welcome to The Den chat.\nPick a lobster above and start talking.\n  Spark = community guide\n  Coral = claw creator\n  Bubba = marketing lobster\n")
 
     def _chat_append(self, role: str, text: str):
         self.chat_display.configure(state="normal")
@@ -459,36 +464,39 @@ class DenApp:
         self.chat_input.delete(0, "end")
         self._chat_append("user", msg)
         self.chat_send_btn.configure(state="disabled")
-        self.chat_status.configure(text="Thinking...", text_color=COLORS["accent_warm"])
+        lobster = self.chat_lobster_var.get()
 
         def do_chat():
-            try:
-                result = subprocess.run(
-                    ["openclaw", "agent", "-m", msg],
-                    capture_output=True, text=True, timeout=60,
-                    encoding="utf-8", errors="replace"
-                )
-                response = result.stdout.strip()
-                if not response:
-                    response = result.stderr.strip() or "No response from your lobster. Is OpenClaw running?"
+            if not REQUESTS_AVAILABLE:
+                self.root.after(0, lambda: self._chat_append("system",
+                    "Install requests: pip install requests"))
+                self.root.after(0, lambda: self.chat_send_btn.configure(state="normal"))
+                return
 
-                self.root.after(0, lambda: self._chat_append("bot", response))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="Ready", text_color=COLORS["status_green"]))
-            except FileNotFoundError:
+            try:
+                url = FLEET.get(lobster, {}).get("url", "")
+                if not url:
+                    self.root.after(0, lambda: self._chat_append("system", "Unknown lobster"))
+                    return
+
+                r = _requests.post(
+                    f"{url}/chat",
+                    json={"message": msg},
+                    timeout=25
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    reply = data.get("reply", "No response")
+                    self.root.after(0, lambda: self._chat_append("bot", f"[{lobster}] {reply}"))
+                else:
+                    self.root.after(0, lambda: self._chat_append("system",
+                        "{} returned status {}".format(lobster, r.status_code)))
+            except _requests.exceptions.Timeout:
                 self.root.after(0, lambda: self._chat_append("system",
-                    "OpenClaw not found. Install it: npm install -g openclaw"))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="OpenClaw not installed", text_color=COLORS["status_red"]))
-            except subprocess.TimeoutExpired:
-                self.root.after(0, lambda: self._chat_append("system",
-                    "Request timed out. Your lobster might be busy."))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="Timeout", text_color=COLORS["status_amber"]))
+                    "{} is taking too long. Try again.".format(lobster)))
             except Exception as e:
-                self.root.after(0, lambda: self._chat_append("system", f"Error: {e}"))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="Error", text_color=COLORS["status_red"]))
+                self.root.after(0, lambda: self._chat_append("system",
+                    "Error: {}".format(str(e)[:80])))
             finally:
                 self.root.after(0, lambda: self.chat_send_btn.configure(state="normal"))
 
