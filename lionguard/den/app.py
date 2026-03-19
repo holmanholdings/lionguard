@@ -47,6 +47,19 @@ COLORS = {
 }
 
 CONFIG_PATH = Path.home() / ".lionguard" / "config.json"
+LICENSE_PATH = Path.home() / ".lionguard" / "license"
+
+
+def check_license() -> bool:
+    return LICENSE_PATH.exists()
+
+
+def activate_license(key: str) -> bool:
+    if not key or not key.startswith("LG-"):
+        return False
+    LICENSE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LICENSE_PATH.write_text(key, encoding="utf-8")
+    return True
 
 
 def load_config() -> dict:
@@ -111,6 +124,8 @@ class DenApp:
                                        segmented_button_selected_color=COLORS["accent_cool"],
                                        segmented_button_unselected_color=COLORS["bg_card"])
         self.tabview.pack(fill="both", expand=True, padx=15, pady=(5, 10))
+
+        self.has_license = check_license()
 
         self.tabview.add("Dashboard")
         self.tabview.add("Chat")
@@ -220,6 +235,13 @@ class DenApp:
     def _build_chat_tab(self):
         tab = self.tabview.tab("Chat")
 
+        if not self.has_license:
+            self._build_locked_panel(tab, "Chat Window",
+                "Talk to your lobster directly from this dashboard.\n\n"
+                "This feature is included with all Lobster packages ($49).\n"
+                "Visit awakened-intelligence.com/forge to get yours.")
+            return
+
         chat_header = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"], corner_radius=8)
         chat_header.pack(fill="x", padx=10, pady=(5, 4))
 
@@ -319,8 +341,69 @@ class DenApp:
 
     # ── Settings Tab ──
 
+    def _build_locked_panel(self, tab, feature_name: str, description: str):
+        lock_frame = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"],
+                                   corner_radius=12, border_width=1,
+                                   border_color=COLORS["border"])
+        lock_frame.pack(fill="x", padx=20, pady=40)
+
+        ctk.CTkLabel(lock_frame, text="🔒",
+                     font=ctk.CTkFont(size=40)).pack(pady=(20, 5))
+
+        ctk.CTkLabel(lock_frame, text=f"{feature_name} — Premium Feature",
+                     font=ctk.CTkFont(size=16, weight="bold"),
+                     text_color=COLORS["text_primary"]).pack(pady=(0, 8))
+
+        ctk.CTkLabel(lock_frame, text=description,
+                     font=ctk.CTkFont(size=12),
+                     text_color=COLORS["text_secondary"],
+                     wraplength=380, justify="center").pack(padx=20, pady=(0, 10))
+
+        activate_frame = ctk.CTkFrame(lock_frame, fg_color="transparent")
+        activate_frame.pack(padx=20, pady=(5, 15))
+
+        self._license_entry = ctk.CTkEntry(activate_frame, placeholder_text="Enter license key (LG-...)",
+                                            fg_color=COLORS["bg_deep"],
+                                            border_color=COLORS["border"],
+                                            text_color=COLORS["text_primary"],
+                                            font=ctk.CTkFont(size=12),
+                                            width=250)
+        self._license_entry.pack(side="left", padx=(0, 8))
+
+        self._activate_status = ctk.CTkLabel(lock_frame, text="",
+                                              font=ctk.CTkFont(size=11),
+                                              text_color=COLORS["status_green"])
+        self._activate_status.pack(pady=(0, 15))
+
+        def do_activate():
+            key = self._license_entry.get().strip()
+            if activate_license(key):
+                self._activate_status.configure(
+                    text="License activated! Restart The Den to unlock features.",
+                    text_color=COLORS["status_green"])
+            else:
+                self._activate_status.configure(
+                    text="Invalid key. Keys start with LG-",
+                    text_color=COLORS["status_red"])
+
+        ctk.CTkButton(activate_frame, text="Activate", width=80,
+                      font=ctk.CTkFont(size=12, weight="bold"),
+                      fg_color=COLORS["accent_cool"],
+                      hover_color="#0891b2",
+                      text_color=COLORS["bg_deep"],
+                      corner_radius=8,
+                      command=do_activate).pack(side="left")
+
     def _build_settings_tab(self):
         tab = self.tabview.tab("Settings")
+
+        if not self.has_license:
+            self._build_locked_panel(tab, "Easy API Setup",
+                "Configure your API keys and model settings\n"
+                "without touching any config files.\n\n"
+                "This feature is included with all Lobster packages ($49).\n"
+                "Visit awakened-intelligence.com/forge to get yours.")
+            return
 
         ctk.CTkLabel(tab, text="Lionguard Configuration",
                      font=ctk.CTkFont(size=16, weight="bold"),

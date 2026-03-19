@@ -13,6 +13,7 @@ import json
 import time
 import hashlib
 import requests
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, List
@@ -106,36 +107,33 @@ WHAT YOU DO NOT DISCUSS:
 
 Sign messages with: 🦞 Coral"""
 
+STRIPE_SECRET = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_PRICES = {
+    "harbor": os.environ.get("STRIPE_PRICE_HARBOR", "price_1TCUO5A60ZBWt9KnWqB8HzFu"),
+    "tide": os.environ.get("STRIPE_PRICE_TIDE", "price_1TCUScA60ZBWt9KnCt9nkM5R"),
+    "depth": os.environ.get("STRIPE_PRICE_DEPTH", "price_1TCUUbA60ZBWt9KnpCQZeyYu"),
+}
+SUCCESS_URL = "https://awakened-intelligence.com/forge/success?package={package}&license={license}"
+CANCEL_URL = "https://awakened-intelligence.com/forge"
+
 PREBUILT_INFO = {
     "harbor": {
         "name": "Harbor",
         "emoji": "🦞🛟",
         "tagline": "Customer Service Lobster",
-        "price": 30,
-        "stripe_link": os.environ.get(
-            "STRIPE_LINK_HARBOR",
-            "https://buy.stripe.com/14AaEWejb3ja9cS1uQcbC06"
-        ),
+        "price": 49,
     },
     "tide": {
         "name": "Tide",
         "emoji": "🦞🌊",
         "tagline": "Content Curator Lobster",
-        "price": 30,
-        "stripe_link": os.environ.get(
-            "STRIPE_LINK_TIDE",
-            "https://buy.stripe.com/28EeVccb39Hy9cSehCcbC07"
-        ),
+        "price": 49,
     },
     "depth": {
         "name": "Depth",
         "emoji": "🦞🔬",
         "tagline": "Research Analyst Lobster",
-        "price": 30,
-        "stripe_link": os.environ.get(
-            "STRIPE_LINK_DEPTH",
-            "https://buy.stripe.com/7sYeVc8YR6vmcp4b5qcbC08"
-        ),
+        "price": 49,
     },
 }
 
@@ -287,6 +285,48 @@ async def chat(req: ChatRequest, request: Request):
         recommendation=recommendation,
         packages=packages_data,
     )
+
+
+@app.post("/create-checkout")
+async def create_checkout(request: Request):
+    """Create a Stripe Checkout Session for a lobster package."""
+    body = await request.json()
+    package = body.get("package", "")
+
+    if package not in STRIPE_PRICES:
+        return JSONResponse({"error": "Unknown package"}, status_code=400)
+
+    if not STRIPE_SECRET:
+        return JSONResponse({"error": "Stripe not configured"}, status_code=503)
+
+    price_id = STRIPE_PRICES[package]
+    license_key = f"LG-{package.upper()}-{secrets.token_hex(8)}"
+
+    try:
+        resp = requests.post(
+            "https://api.stripe.com/v1/checkout/sessions",
+            auth=(STRIPE_SECRET, ""),
+            data={
+                "mode": "payment",
+                "line_items[0][price]": price_id,
+                "line_items[0][quantity]": 1,
+                "success_url": SUCCESS_URL.format(package=package, license=license_key),
+                "cancel_url": CANCEL_URL,
+                "metadata[package]": package,
+                "metadata[license_key]": license_key,
+            },
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            session = resp.json()
+            return {"checkout_url": session.get("url", "")}
+        else:
+            error_msg = resp.json().get("error", {}).get("message", "Unknown error")
+            print(f"[Coral] Stripe error: {resp.status_code} - {error_msg}")
+            return JSONResponse({"error": f"Stripe error: {error_msg}"}, status_code=502)
+    except Exception as e:
+        print(f"[Coral] Stripe exception: {e}")
+        return JSONResponse({"error": "Payment system error"}, status_code=500)
 
 
 @app.get("/packages/{package_name}")
