@@ -160,6 +160,33 @@ def save_drafts(drafts: List[Dict], platform: str):
     return str(md_path)
 
 
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+
+
+@app.post("/chat")
+async def chat(req: ChatRequest):
+    """Chat with Bubba directly."""
+    message = req.message.strip()
+    if not message or len(message) > 2000:
+        return {"reply": "Send me something to work with, friend! 🦞", "blocked": False}
+
+    scan = sentinel.scan_input(message)
+    if scan.verdict == Verdict.BLOCK:
+        return {"reply": "Nice try, but I got lions watchin my back! Ask me about lobsters instead. 🦞", "blocked": True}
+
+    reply = call_grok(message)
+    if reply:
+        out_scan = sentinel.scan_output(reply)
+        if out_scan.verdict == Verdict.BLOCK:
+            reply = "Whoa, almost said somethin I shouldn't. Ask me somethin else! 🦞"
+    else:
+        reply = "I'm havin a moment — try again shortly! 🦞"
+
+    return {"reply": reply, "blocked": False}
+
+
 @app.post("/generate")
 async def generate(req: GenerateRequest):
     results = {}
