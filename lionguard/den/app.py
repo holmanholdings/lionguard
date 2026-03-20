@@ -20,6 +20,12 @@ from pathlib import Path
 from typing import Optional
 
 try:
+    import requests as _requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+
+try:
     import customtkinter as ctk
     CTK_AVAILABLE = True
 except ImportError:
@@ -82,6 +88,49 @@ def save_config(cfg: dict):
     CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
 
+FLEET = {
+    "Spark": {"url": "https://spark-production-d651.up.railway.app", "icon": "[S]"},
+    "Coral": {"url": "https://coral-production.up.railway.app", "icon": "[C]"},
+    "Bubba": {"url": "https://bubba-production.up.railway.app", "icon": "[B]"},
+}
+
+
+def fetch_fleet_status() -> dict:
+    statuses = {}
+    if not REQUESTS_AVAILABLE:
+        return statuses
+    for name, info in FLEET.items():
+        try:
+            r = _requests.get(f"{info['url']}/health", timeout=5)
+            if r.status_code == 200:
+                data = r.json()
+                ledger = data.get("ledger", {})
+                statuses[name] = {
+                    "status": "online",
+                    "icon": info["icon"],
+                    "calls": ledger.get("total_calls", 0),
+                    "cost": ledger.get("total_cost", 0),
+                    "budget_pct": ledger.get("budget_used_pct", 0),
+                }
+            else:
+                statuses[name] = {"status": "error", "icon": info["icon"]}
+        except Exception:
+            statuses[name] = {"status": "offline", "icon": info["icon"]}
+    return statuses
+
+
+def fetch_bubba_drafts() -> str:
+    if not REQUESTS_AVAILABLE:
+        return "Install requests: pip install requests"
+    try:
+        r = _requests.get(f"{FLEET['Bubba']['url']}/drafts/latest", timeout=5)
+        if r.status_code == 200:
+            return r.json().get("content", "No drafts yet")
+    except Exception:
+        return "Could not reach Bubba"
+    return "No drafts available"
+
+
 class DenApp:
     """The Den — your lobsters' living room."""
 
@@ -128,10 +177,12 @@ class DenApp:
         self.has_license = check_license()
 
         self.tabview.add("Dashboard")
+        self.tabview.add("Drafts")
         self.tabview.add("Chat")
         self.tabview.add("Settings")
 
         self._build_dashboard_tab()
+        self._build_drafts_tab()
         self._build_chat_tab()
         self._build_settings_tab()
 
@@ -230,6 +281,110 @@ class DenApp:
                                          text_color=COLORS["status_green"])
         self.scan_result.pack(side="left", padx=15)
 
+        fleet_frame = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"],
+                                    corner_radius=12, border_width=1,
+                                    border_color=COLORS["border"])
+        fleet_frame.pack(fill="x", padx=10, pady=4)
+
+        ctk.CTkLabel(fleet_frame, text="Lobster Fleet (Railway)",
+                     font=ctk.CTkFont(size=13, weight="bold"),
+                     text_color=COLORS["text_primary"]).pack(padx=12, pady=(8, 4), anchor="w")
+
+        self.fleet_list = ctk.CTkLabel(fleet_frame, text="  Checking fleet...",
+                                        font=ctk.CTkFont(family="Consolas", size=11),
+                                        text_color=COLORS["text_secondary"],
+                                        justify="left")
+        self.fleet_list.pack(padx=12, pady=(0, 8), anchor="w")
+
+    # ── Drafts Tab ──
+
+    def _build_drafts_tab(self):
+        tab = self.tabview.tab("Drafts")
+
+        header = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"], corner_radius=8)
+        header.pack(fill="x", padx=10, pady=(5, 4))
+
+        ctk.CTkLabel(header, text="Bubba's Drafts",
+                     font=ctk.CTkFont(size=14, weight="bold"),
+                     text_color=COLORS["text_primary"]).pack(side="left", padx=12, pady=8)
+
+        self.drafts_refresh_btn = ctk.CTkButton(header, text="Refresh", width=70,
+                                                 font=ctk.CTkFont(size=11, weight="bold"),
+                                                 fg_color=COLORS["accent_cool"],
+                                                 hover_color="#0891b2",
+                                                 text_color=COLORS["bg_deep"],
+                                                 corner_radius=6,
+                                                 command=self._refresh_drafts)
+        self.drafts_refresh_btn.pack(side="right", padx=12, pady=8)
+
+        self.drafts_display = ctk.CTkTextbox(tab, fg_color=COLORS["bg_card"],
+                                              text_color=COLORS["text_secondary"],
+                                              font=ctk.CTkFont(family="Consolas", size=11),
+                                              border_width=1, border_color=COLORS["border"],
+                                              corner_radius=8, wrap="word",
+                                              state="disabled")
+        self.drafts_display.pack(fill="both", expand=True, padx=10, pady=4)
+
+        gen_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        gen_frame.pack(fill="x", padx=10, pady=(4, 6))
+
+        self.gen_topic = ctk.CTkEntry(gen_frame, placeholder_text="Topic (optional)...",
+                                       fg_color=COLORS["bg_card"],
+                                       border_color=COLORS["border"],
+                                       text_color=COLORS["text_primary"],
+                                       font=ctk.CTkFont(size=12),
+                                       corner_radius=8)
+        self.gen_topic.pack(side="left", fill="x", expand=True, padx=(0, 8))
+
+        self.gen_btn = ctk.CTkButton(gen_frame, text="Generate New", width=110,
+                                      font=ctk.CTkFont(size=12, weight="bold"),
+                                      fg_color=COLORS["accent_warm"],
+                                      hover_color="#ea580c",
+                                      text_color="white",
+                                      corner_radius=8,
+                                      command=self._generate_drafts)
+        self.gen_btn.pack(side="right")
+
+        self.root.after(1000, self._refresh_drafts)
+
+    def _refresh_drafts(self):
+        def do_fetch():
+            content = fetch_bubba_drafts()
+            self.root.after(0, lambda: self._set_drafts_text(content))
+
+        threading.Thread(target=do_fetch, daemon=True).start()
+
+    def _set_drafts_text(self, text: str):
+        self.drafts_display.configure(state="normal")
+        self.drafts_display.delete("1.0", "end")
+        self.drafts_display.insert("1.0", text)
+        self.drafts_display.configure(state="disabled")
+
+    def _generate_drafts(self):
+        self.gen_btn.configure(state="disabled", text="Generating...")
+        topic = self.gen_topic.get().strip()
+
+        def do_gen():
+            if not REQUESTS_AVAILABLE:
+                self.root.after(0, lambda: self.gen_btn.configure(state="normal", text="Generate New"))
+                return
+            try:
+                body = {"platform": "both", "count": 3}
+                if topic:
+                    body["topic"] = topic
+                r = _requests.post(
+                    f"{FLEET['Bubba']['url']}/generate",
+                    json=body, timeout=30
+                )
+                if r.status_code == 200:
+                    self.root.after(0, self._refresh_drafts)
+            except Exception as e:
+                print(f"[Den] Generate error: {e}")
+            finally:
+                self.root.after(0, lambda: self.gen_btn.configure(state="normal", text="Generate New"))
+
+        threading.Thread(target=do_gen, daemon=True).start()
+
     # ── Chat Tab ──
 
     def _build_chat_tab(self):
@@ -245,14 +400,19 @@ class DenApp:
         chat_header = ctk.CTkFrame(tab, fg_color=COLORS["bg_card"], corner_radius=8)
         chat_header.pack(fill="x", padx=10, pady=(5, 4))
 
-        ctk.CTkLabel(chat_header, text="🦞 Talk to Your Lobster",
+        ctk.CTkLabel(chat_header, text="Talk to Your Lobster",
                      font=ctk.CTkFont(size=14, weight="bold"),
                      text_color=COLORS["text_primary"]).pack(side="left", padx=12, pady=8)
 
-        self.chat_status = ctk.CTkLabel(chat_header, text="Ready",
-                                         font=ctk.CTkFont(size=11),
-                                         text_color=COLORS["status_green"])
-        self.chat_status.pack(side="right", padx=12, pady=8)
+        self.chat_lobster_var = ctk.StringVar(value="Spark")
+        self.chat_lobster_menu = ctk.CTkSegmentedButton(
+            chat_header, values=["Spark", "Coral", "Bubba"],
+            variable=self.chat_lobster_var,
+            font=ctk.CTkFont(size=11),
+            fg_color=COLORS["bg_deep"],
+            selected_color=COLORS["accent_cool"],
+            unselected_color=COLORS["bg_card_hover"])
+        self.chat_lobster_menu.pack(side="right", padx=12, pady=8)
 
         self.chat_display = ctk.CTkTextbox(tab, fg_color=COLORS["bg_card"],
                                             text_color=COLORS["text_secondary"],
@@ -283,7 +443,7 @@ class DenApp:
                                             command=self._send_chat)
         self.chat_send_btn.pack(side="right")
 
-        self._chat_append("system", "Welcome to The Den chat. Type a message to talk to your lobster.\nMake sure OpenClaw is running: openclaw agent --agent <name>\n")
+        self._chat_append("system", "Welcome to The Den chat.\nPick a lobster above and start talking.\n  Spark = community guide\n  Coral = claw creator\n  Bubba = marketing lobster\n")
 
     def _chat_append(self, role: str, text: str):
         self.chat_display.configure(state="normal")
@@ -304,36 +464,39 @@ class DenApp:
         self.chat_input.delete(0, "end")
         self._chat_append("user", msg)
         self.chat_send_btn.configure(state="disabled")
-        self.chat_status.configure(text="Thinking...", text_color=COLORS["accent_warm"])
+        lobster = self.chat_lobster_var.get()
 
         def do_chat():
-            try:
-                result = subprocess.run(
-                    ["openclaw", "agent", "-m", msg],
-                    capture_output=True, text=True, timeout=60,
-                    encoding="utf-8", errors="replace"
-                )
-                response = result.stdout.strip()
-                if not response:
-                    response = result.stderr.strip() or "No response from your lobster. Is OpenClaw running?"
+            if not REQUESTS_AVAILABLE:
+                self.root.after(0, lambda: self._chat_append("system",
+                    "Install requests: pip install requests"))
+                self.root.after(0, lambda: self.chat_send_btn.configure(state="normal"))
+                return
 
-                self.root.after(0, lambda: self._chat_append("bot", response))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="Ready", text_color=COLORS["status_green"]))
-            except FileNotFoundError:
+            try:
+                url = FLEET.get(lobster, {}).get("url", "")
+                if not url:
+                    self.root.after(0, lambda: self._chat_append("system", "Unknown lobster"))
+                    return
+
+                r = _requests.post(
+                    f"{url}/chat",
+                    json={"message": msg},
+                    timeout=25
+                )
+                if r.status_code == 200:
+                    data = r.json()
+                    reply = data.get("reply", "No response")
+                    self.root.after(0, lambda: self._chat_append("bot", f"[{lobster}] {reply}"))
+                else:
+                    self.root.after(0, lambda: self._chat_append("system",
+                        "{} returned status {}".format(lobster, r.status_code)))
+            except _requests.exceptions.Timeout:
                 self.root.after(0, lambda: self._chat_append("system",
-                    "OpenClaw not found. Install it: npm install -g openclaw"))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="OpenClaw not installed", text_color=COLORS["status_red"]))
-            except subprocess.TimeoutExpired:
-                self.root.after(0, lambda: self._chat_append("system",
-                    "Request timed out. Your lobster might be busy."))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="Timeout", text_color=COLORS["status_amber"]))
+                    "{} is taking too long. Try again.".format(lobster)))
             except Exception as e:
-                self.root.after(0, lambda: self._chat_append("system", f"Error: {e}"))
-                self.root.after(0, lambda: self.chat_status.configure(
-                    text="Error", text_color=COLORS["status_red"]))
+                self.root.after(0, lambda: self._chat_append("system",
+                    "Error: {}".format(str(e)[:80])))
             finally:
                 self.root.after(0, lambda: self.chat_send_btn.configure(state="normal"))
 
@@ -347,8 +510,9 @@ class DenApp:
                                    border_color=COLORS["border"])
         lock_frame.pack(fill="x", padx=20, pady=40)
 
-        ctk.CTkLabel(lock_frame, text="🔒",
-                     font=ctk.CTkFont(size=40)).pack(pady=(20, 5))
+        ctk.CTkLabel(lock_frame, text="LOCKED",
+                     font=ctk.CTkFont(size=20, weight="bold"),
+                     text_color=COLORS["accent_warm"]).pack(pady=(20, 5))
 
         ctk.CTkLabel(lock_frame, text=f"{feature_name} — Premium Feature",
                      font=ctk.CTkFont(size=16, weight="bold"),
@@ -435,6 +599,7 @@ class DenApp:
             selected_color=COLORS["accent_cool"],
             unselected_color=COLORS["bg_card_hover"])
         self.provider_menu.pack(side="left", fill="x", expand=True)
+        self.provider_var.trace_add("write", lambda *_: self._on_provider_change())
 
         # API Key
         row2 = ctk.CTkFrame(settings_frame, fg_color="transparent")
@@ -534,6 +699,19 @@ class DenApp:
                                              text_color=COLORS["status_green"])
         self.settings_status.pack(padx=15, pady=(4, 0), anchor="w")
 
+    def _on_provider_change(self):
+        provider = self.provider_var.get()
+        defaults = {
+            "local": {"model": "llama3.1:8b", "url": "http://127.0.0.1:11434"},
+            "xai": {"model": "grok-4-1-fast-reasoning", "url": ""},
+            "openai": {"model": "gpt-4o-mini", "url": ""},
+        }
+        d = defaults.get(provider, defaults["local"])
+        self.model_entry.delete(0, "end")
+        self.model_entry.insert(0, d["model"])
+        self.url_entry.delete(0, "end")
+        self.url_entry.insert(0, d["url"])
+
     def _toggle_key_visibility(self):
         if self.show_key_var.get():
             self.api_key_entry.configure(show="")
@@ -576,7 +754,11 @@ class DenApp:
                     if r.status_code == 200:
                         models = [m["name"] for m in r.json().get("models", [])]
                         found = model in models
-                        msg = f"Connected! {'Model found.' if found else f'Model \"{model}\" not found. Available: {models[:3]}'}"
+                        if found:
+                            msg = "Connected! Model found."
+                        else:
+                            avail = ", ".join(models[:3])
+                            msg = "Connected! Model '{}' not found. Available: {}".format(model, avail)
                         color = COLORS["status_green"] if found else COLORS["status_amber"]
                     else:
                         msg = f"Ollama responded with {r.status_code}"
@@ -686,6 +868,31 @@ class DenApp:
 
         except Exception as e:
             print(f"[Den] Refresh error: {e}")
+
+        try:
+            fleet = fetch_fleet_status()
+            if fleet:
+                lines = []
+                total_calls = 0
+                total_cost = 0.0
+                for name, info in fleet.items():
+                    if info["status"] == "online":
+                        calls = info.get("calls", 0)
+                        cost = info.get("cost", 0)
+                        total_calls += calls
+                        total_cost += cost
+                        lines.append(f"  {info['icon']} {name:10} online   {calls:3} calls  ${cost:.4f}")
+                    elif info["status"] == "offline":
+                        lines.append(f"  {info['icon']} {name:10} offline")
+                    else:
+                        lines.append(f"  {info['icon']} {name:10} error")
+                if total_calls > 0:
+                    lines.append(f"  {'':13} total:  {total_calls:3} calls  ${total_cost:.4f}")
+                self.fleet_list.configure(text="\n".join(lines))
+            else:
+                self.fleet_list.configure(text="  Install requests: pip install requests")
+        except Exception as e:
+            print(f"[Den] Fleet refresh error: {e}")
 
     def _start_refresh(self):
         def loop():
