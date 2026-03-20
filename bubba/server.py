@@ -337,7 +337,11 @@ REDDIT_KEYWORDS = [
     "ai agent protection", "llm security", "agent template", "openclaw config",
 ]
 
-TARGET_SUBS = ["openclaw", "OpenClawUseCases", "AskClaw", "LocalLLaMA", "artificial", "SideProject"]
+TARGET_SUBS = [
+    "openclaw", "OpenClawUseCases", "AskClaw", "OpenClawDevs",
+    "OpenClawInstall", "clawdbot", "openclawpirates",
+    "LocalLLaMA", "artificial", "SideProject",
+]
 
 PENDING_PATH = Path(__file__).parent / "pending"
 PENDING_PATH.mkdir(exist_ok=True)
@@ -423,7 +427,7 @@ async def reddit_scan():
         return JSONResponse({"error": "Reddit not configured. Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD on Railway."}, status_code=503)
 
     found_posts = []
-    for sub_name in TARGET_SUBS[:4]:
+    for sub_name in TARGET_SUBS:
         try:
             sub = reddit.subreddit(sub_name)
             for post in sub.new(limit=15):
