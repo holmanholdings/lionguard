@@ -342,6 +342,25 @@ TARGET_SUBS = ["openclaw", "OpenClawUseCases", "AskClaw", "LocalLLaMA", "artific
 PENDING_PATH = Path(__file__).parent / "pending"
 PENDING_PATH.mkdir(exist_ok=True)
 
+SEEN_POSTS_PATH = Path(__file__).parent / "seen_posts.json"
+
+
+def load_seen_posts() -> set:
+    if SEEN_POSTS_PATH.exists():
+        try:
+            return set(json.loads(SEEN_POSTS_PATH.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return set()
+
+
+def mark_post_seen(post_id: str):
+    seen = load_seen_posts()
+    seen.add(post_id)
+    if len(seen) > 500:
+        seen = set(list(seen)[-500:])
+    SEEN_POSTS_PATH.write_text(json.dumps(list(seen)), encoding="utf-8")
+
 
 def get_reddit():
     if not PRAW_AVAILABLE:
@@ -394,11 +413,15 @@ async def reddit_scan():
     if not reddit:
         return JSONResponse({"error": "Reddit not configured. Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD on Railway."}, status_code=503)
 
+    seen = load_seen_posts()
     found_posts = []
     for sub_name in TARGET_SUBS[:4]:
         try:
             sub = reddit.subreddit(sub_name)
             for post in sub.new(limit=15):
+                if post.id in seen:
+                    continue
+
                 age_hours = (time.time() - post.created_utc) / 3600
                 if age_hours > 48:
                     continue
@@ -445,6 +468,7 @@ async def reddit_scan():
                 "platform": "reddit",
             }
             save_pending(draft)
+            mark_post_seen(post["id"])
             drafts_created += 1
 
     return {
