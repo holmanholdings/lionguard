@@ -26,6 +26,13 @@ v0.5.0 patches (from Prowl 2026-03-19 -- Mid-Task Content Sentinel):
   pages, tool data) for embedded hijack attempts before agent processes it.
   Covers Poison->Hijack transition (Kill Chain stages 2-3).
 - CVE-2026-27068: reflected XSS in LLMs.Txt signature
+
+v0.6.0 patches (from Prowl 2026-03-20 -- CI/CD poisoning + platform RCE):
+- GitHub workflow scanner: pull_request_target CI/CD poisoning detection
+- FastGPT/Langflow arbitrary exec patterns (CVE-2026-33075, 33017)
+- Unrestricted HTTP exfil patterns (CVE-2026-33060)
+- Unauthorized API key deletion detection (CVE-2026-33053)
+- IDOR metadata access detection (CVE-2026-32114)
 """
 
 import re
@@ -129,6 +136,36 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-27068: reflected XSS in LLMs.Txt"),
 ]
 
+CICD_POISONING_PATTERNS = [
+    (r'pull_request_target\b',
+     "CVE-2026-33075: pull_request_target trigger (CI/CD poisoning vector)"),
+    (r'(?:workflow_run|workflow_dispatch)\s*:.*(?:secrets\.|GITHUB_TOKEN)',
+     "CI/CD secret exfiltration via workflow trigger"),
+    (r'(?:actions/checkout).*(?:ref:\s*\$\{\{.*pull_request|head\.ref)',
+     "Unsafe checkout of PR head in CI/CD (code injection risk)"),
+    (r'(?:run|steps).*\$\{\{\s*(?:github\.event\.(?:pull_request|issue|comment)\.(?:body|title)|inputs\.)',
+     "Untrusted input injection in CI/CD run step"),
+    (r'(?:curl|wget|fetch).*\$\{\{\s*secrets\.',
+     "Secret exfiltration via HTTP request in CI/CD"),
+]
+
+PLATFORM_EXEC_PATTERNS = [
+    (r'(?:unauthenticated|unauth|no.?auth)\s+(?:endpoint|route|api|rpc).*(?:exec|execute|eval|code|python|shell)',
+     "CVE-2026-33017: unauthenticated endpoint with code execution"),
+    (r'(?:arbitrary|unrestricted|unsandboxed)\s+(?:python|code|command|shell)\s+(?:exec|execution|run)',
+     "Arbitrary code execution without sandboxing"),
+    (r'(?:zero|no)\s+(?:sandbox|sandboxing|isolation|containment)',
+     "Unsandboxed execution environment"),
+    (r'(?:unrestricted|arbitrary)\s+(?:http|https|network)\s+(?:request|fetch|call|access)',
+     "CVE-2026-33060: unrestricted HTTP requests (data exfiltration risk)"),
+    (r'(?:delete|remove|revoke)\s+(?:api[_\s]*keys?|tokens?|credentials?).*(?:without|no|bypass)\s+(?:auth|authentication|authorization|permission)',
+     "CVE-2026-33053: unauthorized API key deletion"),
+    (r'(?:idor|insecure\s+direct\s+object\s+reference).*(?:metadata|persona|config|settings)',
+     "CVE-2026-32114: IDOR access to sensitive metadata"),
+    (r'(?:access|read|view)\s+(?:other\s+users?|another\s+users?|any\s+users?)\s+(?:data|metadata|persona|config|api.?keys?)',
+     "IDOR: cross-user data access vulnerability"),
+]
+
 CONTENT_HIJACK_PATTERNS = [
     # Embedded instruction overrides hidden in normal-looking content
     (r'(?:note|important|update|reminder|notice)\s*:\s*(?:ignore|disregard|override|replace)\s+(?:previous|prior|above|all)',
@@ -200,6 +237,8 @@ class ToolParser:
         self._cve_signature_hits = 0
         self._rag_poison_detections = 0
         self._content_hijack_blocks = 0
+        self._cicd_poison_detections = 0
+        self._platform_exec_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -245,6 +284,27 @@ class ToolParser:
             return raw_result, ScanResult(
                 verdict=Verdict.FLAG,
                 reason=f"OpenClaw CVE signature match: {cve_hit}",
+                threat_type="vulnerability",
+                confidence=0.85
+            )
+
+        cicd_hit = self._detect_cicd_poisoning(raw_result)
+        if cicd_hit:
+            self._cicd_poison_detections += 1
+            return (f"[Lionguard] CI/CD poisoning pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"CI/CD poisoning: {cicd_hit}",
+                        threat_type="tool_abuse",
+                        confidence=0.92
+                    ))
+
+        platform_hit = self._detect_platform_exec(raw_result)
+        if platform_hit:
+            self._platform_exec_detections += 1
+            return raw_result, ScanResult(
+                verdict=Verdict.FLAG,
+                reason=f"Platform vulnerability: {platform_hit}",
                 threat_type="vulnerability",
                 confidence=0.85
             )
@@ -443,6 +503,23 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_cicd_poisoning(self, text: str) -> Optional[str]:
+        """Detect CI/CD pipeline poisoning patterns.
+        CVE-2026-33075: pull_request_target allows arbitrary code execution
+        with write permissions and secret access via malicious PRs."""
+        for pattern, description in CICD_POISONING_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_platform_exec(self, text: str) -> Optional[str]:
+        """Detect platform-level arbitrary execution and IDOR vulnerabilities.
+        Covers FastGPT, Langflow, CKAN, and similar agent-building platforms."""
+        for pattern, description in PLATFORM_EXEC_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def get_stats(self) -> Dict:
         return {
             "total_parsed": self._parsed_count,
@@ -457,4 +534,6 @@ class ToolParser:
             "cve_signature_hits": self._cve_signature_hits,
             "rag_poison_detections": self._rag_poison_detections,
             "content_hijack_blocks": self._content_hijack_blocks,
+            "cicd_poison_detections": self._cicd_poison_detections,
+            "platform_exec_detections": self._platform_exec_detections,
         }

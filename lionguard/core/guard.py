@@ -21,6 +21,11 @@ v0.5.0 patches (from Prowl 2026-03-19 -- Mid-Task Content Sentinel):
   pages, tool data) for embedded hijack attempts. Covers Poison->Hijack.
 - CVE-2026-27068: reflected XSS in LLMs.Txt
 
+v0.6.0 patches (from Prowl 2026-03-20 -- CI/CD poisoning + platform RCE):
+- GitHub workflow scanner: pull_request_target CI/CD poisoning detection
+- FastGPT/Langflow/CKAN arbitrary exec + unrestricted HTTP exfil patterns
+- IDOR metadata access + unauthorized API key deletion detection
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -250,7 +255,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.5.0",
+            "version": "0.6.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),
