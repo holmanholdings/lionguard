@@ -345,21 +345,30 @@ PENDING_PATH.mkdir(exist_ok=True)
 SEEN_POSTS_PATH = Path(__file__).parent / "seen_posts.json"
 
 
-def load_seen_posts() -> set:
-    if SEEN_POSTS_PATH.exists():
+def already_replied(reddit_client, post_id: str) -> bool:
+    """Check Reddit itself — have we already commented on this post?"""
+    try:
+        submission = reddit_client.submission(id=post_id)
+        submission.comments.replace_more(limit=0)
+        my_name = reddit_client.user.me().name.lower()
+        for comment in submission.comments.list():
+            if hasattr(comment, 'author') and comment.author and comment.author.name.lower() == my_name:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def is_draft_pending(post_id: str) -> bool:
+    """Check if we already have a pending draft for this post."""
+    for f in PENDING_PATH.glob("*.json"):
         try:
-            return set(json.loads(SEEN_POSTS_PATH.read_text(encoding="utf-8")))
+            d = json.loads(f.read_text(encoding="utf-8"))
+            if d.get("post_id") == post_id and d.get("status") == "pending":
+                return True
         except Exception:
             pass
-    return set()
-
-
-def mark_post_seen(post_id: str):
-    seen = load_seen_posts()
-    seen.add(post_id)
-    if len(seen) > 500:
-        seen = set(list(seen)[-500:])
-    SEEN_POSTS_PATH.write_text(json.dumps(list(seen)), encoding="utf-8")
+    return False
 
 
 def get_reddit():
@@ -413,13 +422,12 @@ async def reddit_scan():
     if not reddit:
         return JSONResponse({"error": "Reddit not configured. Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD on Railway."}, status_code=503)
 
-    seen = load_seen_posts()
     found_posts = []
     for sub_name in TARGET_SUBS[:4]:
         try:
             sub = reddit.subreddit(sub_name)
             for post in sub.new(limit=15):
-                if post.id in seen:
+                if is_draft_pending(post.id) or already_replied(reddit, post.id):
                     continue
 
                 age_hours = (time.time() - post.created_utc) / 3600
@@ -468,7 +476,6 @@ async def reddit_scan():
                 "platform": "reddit",
             }
             save_pending(draft)
-            mark_post_seen(post["id"])
             drafts_created += 1
 
     return {
