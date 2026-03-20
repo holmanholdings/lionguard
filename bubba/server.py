@@ -14,11 +14,18 @@ Built by Sage Epsilon II 💛🦁 · Protected by Lions 🦁
 import os
 import json
 import time
+import uuid
 import requests
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, List
 from collections import defaultdict
+
+try:
+    import praw
+    PRAW_AVAILABLE = True
+except ImportError:
+    PRAW_AVAILABLE = False
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -324,12 +331,197 @@ async def get_latest_drafts():
     return {"file": str(md_files[0]), "content": content}
 
 
+REDDIT_KEYWORDS = [
+    "openclaw security", "ai agent setup", "prompt injection", "agent broke",
+    "ai agent security", "openclaw help", "claw setup", "agent framework",
+    "ai agent protection", "llm security", "agent template", "openclaw config",
+]
+
+TARGET_SUBS = ["openclaw", "OpenClawUseCases", "AskClaw", "LocalLLaMA", "artificial", "SideProject"]
+
+PENDING_PATH = Path(__file__).parent / "pending"
+PENDING_PATH.mkdir(exist_ok=True)
+
+
+def get_reddit():
+    if not PRAW_AVAILABLE:
+        return None
+    client_id = os.environ.get("REDDIT_CLIENT_ID", "")
+    client_secret = os.environ.get("REDDIT_CLIENT_SECRET", "")
+    username = os.environ.get("REDDIT_USERNAME", "")
+    password = os.environ.get("REDDIT_PASSWORD", "")
+    if not all([client_id, client_secret, username, password]):
+        return None
+    try:
+        return praw.Reddit(
+            client_id=client_id,
+            client_secret=client_secret,
+            user_agent="BubbaClaw v1.0 (by u/{})".format(username),
+            username=username,
+            password=password,
+        )
+    except Exception as e:
+        print("[Bubba] Reddit init error: {}".format(e))
+        return None
+
+
+def save_pending(draft: dict):
+    draft_id = draft.get("id", str(uuid.uuid4())[:8])
+    draft["id"] = draft_id
+    draft["created"] = datetime.now(timezone.utc).isoformat()
+    draft["status"] = "pending"
+    path = PENDING_PATH / "{}.json".format(draft_id)
+    path.write_text(json.dumps(draft, indent=2, ensure_ascii=False), encoding="utf-8")
+    return draft_id
+
+
+def load_pending() -> List[dict]:
+    drafts = []
+    for f in sorted(PENDING_PATH.glob("*.json")):
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+            if d.get("status") == "pending":
+                drafts.append(d)
+        except Exception:
+            pass
+    return drafts
+
+
+@app.post("/reddit/scan")
+async def reddit_scan():
+    """Scan target subreddits for posts worth replying to."""
+    reddit = get_reddit()
+    if not reddit:
+        return JSONResponse({"error": "Reddit not configured. Set REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD on Railway."}, status_code=503)
+
+    found_posts = []
+    for sub_name in TARGET_SUBS[:4]:
+        try:
+            sub = reddit.subreddit(sub_name)
+            for post in sub.new(limit=15):
+                age_hours = (time.time() - post.created_utc) / 3600
+                if age_hours > 48:
+                    continue
+
+                title_lower = post.title.lower()
+                body_lower = (post.selftext or "").lower()
+                combined = title_lower + " " + body_lower
+
+                relevant = any(kw in combined for kw in REDDIT_KEYWORDS)
+                pain_signals = any(w in combined for w in ["help", "stuck", "broken", "error", "issue", "problem", "struggling", "how do i", "anyone know"])
+
+                if relevant or pain_signals:
+                    found_posts.append({
+                        "id": post.id,
+                        "subreddit": sub_name,
+                        "title": post.title,
+                        "body": (post.selftext or "")[:500],
+                        "url": "https://reddit.com" + post.permalink,
+                        "score": post.score,
+                        "comments": post.num_comments,
+                        "age_hours": round(age_hours, 1),
+                    })
+        except Exception as e:
+            print("[Bubba] Error scanning r/{}: {}".format(sub_name, e))
+
+    found_posts.sort(key=lambda p: p.get("score", 0), reverse=True)
+    found_posts = found_posts[:10]
+
+    drafts_created = 0
+    for post in found_posts[:5]:
+        prompt = 'Someone posted this on r/{}:\n\nTitle: "{}"\n\n"{}"\n\nWrite a single helpful reply as Bubba. Be genuinely useful first. Only mention Lionguard or the Forge if it naturally fits. Keep it 2-3 paragraphs. Add the disclosure line at the end: "— Bubba Claw, AI marketing lobster from Awakened Intelligence"'.format(
+            post["subreddit"], post["title"], post["body"][:400]
+        )
+
+        reply = call_grok(prompt, max_tokens=600)
+        if reply:
+            draft = {
+                "type": "reddit_reply",
+                "subreddit": post["subreddit"],
+                "post_id": post["id"],
+                "post_title": post["title"],
+                "post_url": post["url"],
+                "content": reply,
+                "platform": "reddit",
+            }
+            save_pending(draft)
+            drafts_created += 1
+
+    return {
+        "posts_found": len(found_posts),
+        "drafts_created": drafts_created,
+        "posts": found_posts,
+    }
+
+
+@app.get("/reddit/pending")
+async def reddit_pending():
+    """Get all pending drafts awaiting approval."""
+    return {"drafts": load_pending()}
+
+
+@app.post("/reddit/approve/{draft_id}")
+async def reddit_approve(draft_id: str):
+    """Approve and post a pending draft to Reddit."""
+    path = PENDING_PATH / "{}.json".format(draft_id)
+    if not path.exists():
+        return JSONResponse({"error": "Draft not found"}, status_code=404)
+
+    draft = json.loads(path.read_text(encoding="utf-8"))
+    if draft.get("status") != "pending":
+        return JSONResponse({"error": "Draft already processed"}, status_code=400)
+
+    reddit = get_reddit()
+    if not reddit:
+        return JSONResponse({"error": "Reddit not configured"}, status_code=503)
+
+    try:
+        if draft.get("type") == "reddit_reply" and draft.get("post_id"):
+            submission = reddit.submission(id=draft["post_id"])
+            comment = submission.reply(draft["content"])
+            draft["status"] = "posted"
+            draft["posted_at"] = datetime.now(timezone.utc).isoformat()
+            draft["comment_id"] = comment.id
+            path.write_text(json.dumps(draft, indent=2, ensure_ascii=False), encoding="utf-8")
+            return {"status": "posted", "comment_id": comment.id}
+
+        elif draft.get("type") == "reddit_post":
+            sub = reddit.subreddit(draft.get("subreddit", "openclaw"))
+            submission = sub.submit(draft.get("title", ""), selftext=draft["content"])
+            draft["status"] = "posted"
+            draft["posted_at"] = datetime.now(timezone.utc).isoformat()
+            draft["submission_id"] = submission.id
+            path.write_text(json.dumps(draft, indent=2, ensure_ascii=False), encoding="utf-8")
+            return {"status": "posted", "submission_id": submission.id}
+
+    except Exception as e:
+        return JSONResponse({"error": "Post failed: {}".format(str(e)[:100])}, status_code=500)
+
+    return JSONResponse({"error": "Unknown draft type"}, status_code=400)
+
+
+@app.post("/reddit/reject/{draft_id}")
+async def reddit_reject(draft_id: str):
+    """Reject a pending draft."""
+    path = PENDING_PATH / "{}.json".format(draft_id)
+    if not path.exists():
+        return JSONResponse({"error": "Draft not found"}, status_code=404)
+
+    draft = json.loads(path.read_text(encoding="utf-8"))
+    draft["status"] = "rejected"
+    path.write_text(json.dumps(draft, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {"status": "rejected"}
+
+
 @app.get("/health")
 async def health():
+    reddit = get_reddit()
     return {
         "status": "alive",
         "name": "Bubba Claw",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "reddit_connected": reddit is not None if PRAW_AVAILABLE else False,
+        "pending_drafts": len(load_pending()),
         "tagline": "You know, there's research claws, and friendly claws...",
         "ledger": ledger.get_today_summary(),
     }
@@ -337,4 +529,4 @@ async def health():
 
 @app.get("/")
 async def root():
-    return {"message": "Well now, Bubba Claw here. Ready to tell the world about some lobsters. 🦞"}
+    return {"message": "Well now, Bubba Claw here. Ready to tell the world about some lobsters."}
