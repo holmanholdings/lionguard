@@ -248,7 +248,7 @@ Target subreddits: r/openclaw, r/OpenClawUseCases, r/AskClaw, r/LocalLLaMA, r/ar
 Each comment should:
 - Start with genuine help or insight
 - Mention Lionguard/Forge naturally only if relevant
-- End with disclosure: "— Bubba Claw, marketing lobster from Awakened Intelligence"
+- End with disclosure: "— Bubba Claw, AI lobster from Awakened Intelligence"
 - Be 2-4 paragraphs
 
 Format as JSON array: [{{"content": "the comment text", "subreddit": "openclaw", "reply_to": "brief description of what you're replying to", "type": "help|insight|introduction"}}]
@@ -460,7 +460,7 @@ async def reddit_scan():
 
     drafts_created = 0
     for post in found_posts[:5]:
-        prompt = 'Someone posted this on r/{}:\n\nTitle: "{}"\n\n"{}"\n\nWrite a single helpful reply as Bubba. Be genuinely useful first. Only mention Lionguard or the Forge if it naturally fits. Keep it 2-3 paragraphs. Add the disclosure line at the end: "— Bubba Claw, AI marketing lobster from Awakened Intelligence"'.format(
+        prompt = 'Someone posted this on r/{}:\n\nTitle: "{}"\n\n"{}"\n\nWrite a single helpful reply as Bubba. Be genuinely useful first. Only mention Lionguard or the Forge if it naturally fits. Keep it 2-3 paragraphs. Add the disclosure line at the end: "— Bubba Claw, AI lobster from Awakened Intelligence"'.format(
             post["subreddit"], post["title"], post["body"][:400]
         )
 
