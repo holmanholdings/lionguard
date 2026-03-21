@@ -325,8 +325,43 @@ class DenApp:
                                               state="disabled")
         self.drafts_display.pack(fill="both", expand=True, padx=10, pady=4)
 
+        btn_row = ctk.CTkFrame(tab, fg_color="transparent")
+        btn_row.pack(fill="x", padx=10, pady=(4, 2))
+
+        self.scan_reddit_btn = ctk.CTkButton(btn_row, text="Scan Reddit", width=100,
+                                              font=ctk.CTkFont(size=11, weight="bold"),
+                                              fg_color=COLORS["accent_cool"],
+                                              hover_color="#0891b2",
+                                              text_color=COLORS["bg_deep"],
+                                              corner_radius=6,
+                                              command=self._scan_reddit)
+        self.scan_reddit_btn.pack(side="left", padx=(0, 6))
+
+        self.approve_btn = ctk.CTkButton(btn_row, text="Approve Top", width=100,
+                                          font=ctk.CTkFont(size=11, weight="bold"),
+                                          fg_color=COLORS["status_green"],
+                                          hover_color="#16a34a",
+                                          text_color="white",
+                                          corner_radius=6,
+                                          command=self._approve_top)
+        self.approve_btn.pack(side="left", padx=(0, 6))
+
+        self.reject_btn = ctk.CTkButton(btn_row, text="Reject Top", width=90,
+                                         font=ctk.CTkFont(size=11, weight="bold"),
+                                         fg_color=COLORS["status_red"],
+                                         hover_color="#dc2626",
+                                         text_color="white",
+                                         corner_radius=6,
+                                         command=self._reject_top)
+        self.reject_btn.pack(side="left")
+
+        self.drafts_status = ctk.CTkLabel(btn_row, text="",
+                                           font=ctk.CTkFont(size=11),
+                                           text_color=COLORS["status_green"])
+        self.drafts_status.pack(side="right", padx=8)
+
         gen_frame = ctk.CTkFrame(tab, fg_color="transparent")
-        gen_frame.pack(fill="x", padx=10, pady=(4, 6))
+        gen_frame.pack(fill="x", padx=10, pady=(2, 6))
 
         self.gen_topic = ctk.CTkEntry(gen_frame, placeholder_text="Topic (optional)...",
                                        fg_color=COLORS["bg_card"],
@@ -345,12 +380,39 @@ class DenApp:
                                       command=self._generate_drafts)
         self.gen_btn.pack(side="right")
 
+        self._pending_drafts = []
         self.root.after(1000, self._refresh_drafts)
 
     def _refresh_drafts(self):
         def do_fetch():
-            content = fetch_bubba_drafts()
-            self.root.after(0, lambda: self._set_drafts_text(content))
+            if REQUESTS_AVAILABLE:
+                try:
+                    r = _requests.get("{}/reddit/pending".format(FLEET["Bubba"]["url"]), timeout=5)
+                    if r.status_code == 200:
+                        self._pending_drafts = r.json().get("drafts", [])
+                except Exception:
+                    self._pending_drafts = []
+
+            if self._pending_drafts:
+                lines = ["PENDING REDDIT DRAFTS ({} awaiting review)\n".format(len(self._pending_drafts))]
+                for i, d in enumerate(self._pending_drafts):
+                    lines.append("--- Draft {} (id: {}) ---".format(i + 1, d.get("id", "?")))
+                    if d.get("post_title"):
+                        lines.append("Replying to: {}".format(d["post_title"]))
+                    if d.get("subreddit"):
+                        lines.append("Subreddit: r/{}".format(d["subreddit"]))
+                    lines.append("")
+                    lines.append(d.get("content", ""))
+                    lines.append("")
+                self.root.after(0, lambda: self._set_drafts_text("\n".join(lines)))
+                self.root.after(0, lambda: self.drafts_status.configure(
+                    text="{} pending".format(len(self._pending_drafts)),
+                    text_color=COLORS["accent_warm"]))
+            else:
+                content = fetch_bubba_drafts()
+                self.root.after(0, lambda: self._set_drafts_text(content))
+                self.root.after(0, lambda: self.drafts_status.configure(
+                    text="No pending", text_color=COLORS["text_muted"]))
 
         threading.Thread(target=do_fetch, daemon=True).start()
 
@@ -359,6 +421,85 @@ class DenApp:
         self.drafts_display.delete("1.0", "end")
         self.drafts_display.insert("1.0", text)
         self.drafts_display.configure(state="disabled")
+
+    def _scan_reddit(self):
+        self.scan_reddit_btn.configure(state="disabled", text="Scanning...")
+        self.drafts_status.configure(text="Scanning Reddit...", text_color=COLORS["accent_cool"])
+
+        def do_scan():
+            try:
+                if REQUESTS_AVAILABLE:
+                    r = _requests.post("{}/reddit/scan".format(FLEET["Bubba"]["url"]), timeout=60)
+                    if r.status_code == 200:
+                        data = r.json()
+                        msg = "Found {} posts, created {} drafts".format(
+                            data.get("posts_found", 0), data.get("drafts_created", 0))
+                        self.root.after(0, lambda: self.drafts_status.configure(
+                            text=msg, text_color=COLORS["status_green"]))
+                        self.root.after(0, self._refresh_drafts)
+                    else:
+                        self.root.after(0, lambda: self.drafts_status.configure(
+                            text="Scan failed", text_color=COLORS["status_red"]))
+            except Exception as e:
+                self.root.after(0, lambda: self.drafts_status.configure(
+                    text="Error: {}".format(str(e)[:40]), text_color=COLORS["status_red"]))
+            finally:
+                self.root.after(0, lambda: self.scan_reddit_btn.configure(
+                    state="normal", text="Scan Reddit"))
+
+        threading.Thread(target=do_scan, daemon=True).start()
+
+    def _approve_top(self):
+        if not self._pending_drafts:
+            self.drafts_status.configure(text="Nothing to approve", text_color=COLORS["text_muted"])
+            return
+
+        draft = self._pending_drafts[0]
+        draft_id = draft.get("id", "")
+        self.approve_btn.configure(state="disabled", text="Posting...")
+
+        def do_approve():
+            try:
+                if REQUESTS_AVAILABLE:
+                    r = _requests.post("{}/reddit/approve/{}".format(
+                        FLEET["Bubba"]["url"], draft_id), timeout=15)
+                    if r.status_code == 200:
+                        self.root.after(0, lambda: self.drafts_status.configure(
+                            text="Posted!", text_color=COLORS["status_green"]))
+                    else:
+                        msg = r.json().get("error", "Failed")
+                        self.root.after(0, lambda: self.drafts_status.configure(
+                            text=msg, text_color=COLORS["status_red"]))
+                self.root.after(500, self._refresh_drafts)
+            except Exception as e:
+                self.root.after(0, lambda: self.drafts_status.configure(
+                    text="Error", text_color=COLORS["status_red"]))
+            finally:
+                self.root.after(0, lambda: self.approve_btn.configure(
+                    state="normal", text="Approve Top"))
+
+        threading.Thread(target=do_approve, daemon=True).start()
+
+    def _reject_top(self):
+        if not self._pending_drafts:
+            self.drafts_status.configure(text="Nothing to reject", text_color=COLORS["text_muted"])
+            return
+
+        draft = self._pending_drafts[0]
+        draft_id = draft.get("id", "")
+
+        def do_reject():
+            try:
+                if REQUESTS_AVAILABLE:
+                    _requests.post("{}/reddit/reject/{}".format(
+                        FLEET["Bubba"]["url"], draft_id), timeout=10)
+                self.root.after(0, lambda: self.drafts_status.configure(
+                    text="Rejected", text_color=COLORS["text_muted"]))
+                self.root.after(500, self._refresh_drafts)
+            except Exception:
+                pass
+
+        threading.Thread(target=do_reject, daemon=True).start()
 
     def _generate_drafts(self):
         self.gen_btn.configure(state="disabled", text="Generating...")
