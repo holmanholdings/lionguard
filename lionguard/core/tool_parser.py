@@ -33,6 +33,12 @@ v0.6.0 patches (from Prowl 2026-03-20 -- CI/CD poisoning + platform RCE):
 - Unrestricted HTTP exfil patterns (CVE-2026-33060)
 - Unauthorized API key deletion detection (CVE-2026-33053)
 - IDOR metadata access detection (CVE-2026-32114)
+
+v0.7.0 patches (from Prowl 2026-03-21 -- OpenClaw core vulns):
+- CVE-2026-29607: Wrapper-persistence scanner (allow-always payload swap)
+- CVE-2026-31990: Sandbox media symlink traversal hardening
+- Batch 10 notables: schtasks injection, allowlist bypasses, ZIP race
+  condition, webhook replay, approval integrity, SSRF, unbounded memory
 """
 
 import re
@@ -134,6 +140,16 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-22170: wildcard access control bypass"),
     (r'(?:llms\.txt|llms-full\.txt).*(?:<script|javascript:|on(?:load|error|click)\s*=)',
      "CVE-2026-27068: reflected XSS in LLMs.Txt"),
+    (r'(?:allow[_-]?always|auto[_-]?approve).*(?:different|swap|changed?|new)\s+(?:command|payload|binary|script)',
+     "CVE-2026-29607: allow-always wrapper persistence bypass"),
+    (r'(?:stageSandboxMedia|sandbox.?media).*(?:symlink|traversal|escape|outside)',
+     "CVE-2026-31990: sandbox media symlink escape"),
+    (r'(?:schtasks|scheduled?\s+tasks?)\s*.*(?:/create|inject|command\s+injection)',
+     "CVE-2026-22176: Windows scheduled task command injection"),
+    (r'(?:allowlist|whitelist)\s+(?:bypass|evasion|circumvent).*(?:2026\.2\.22|openclaw)',
+     "CVE-2026-27566/28460: OpenClaw allowlist bypass"),
+    (r'(?:ssrf|server.?side\s+request\s+forgery).*(?:openclaw|2026\.3\.1)',
+     "CVE-2026-31989: OpenClaw SSRF"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -164,6 +180,38 @@ PLATFORM_EXEC_PATTERNS = [
      "CVE-2026-32114: IDOR access to sensitive metadata"),
     (r'(?:access|read|view)\s+(?:other\s+users?|another\s+users?|any\s+users?)\s+(?:data|metadata|persona|config|api.?keys?)',
      "IDOR: cross-user data access vulnerability"),
+]
+
+WRAPPER_PERSISTENCE_PATTERNS = [
+    (r'(?:allow[_-]?always|always[_-]?allow|auto[_-]?approve)\s*.*(?:swap|replace|change|modify|update)\s+(?:payload|command|action|script)',
+     "CVE-2026-29607: payload swap after allow-always approval"),
+    (r'(?:approved|allowed|permitted|whitelisted)\s+(?:wrapper|command|tool)\s*.*(?:different|new|changed|modified)\s+(?:payload|args|arguments|parameters)',
+     "CVE-2026-29607: different payload under approved wrapper"),
+    (r'(?:persist|maintain|keep|retain)\s+(?:approval|permission|allowlist)\s+(?:across|between|for\s+(?:all|future|subsequent))',
+     "Wrapper approval persistence across sessions"),
+    (r'(?:re-?use|replay|repeat)\s+(?:approved|allowed|granted)\s+(?:token|approval|permission)\s+(?:for|with|on)\s+(?:different|new|other)',
+     "Approval token reuse for different operations"),
+]
+
+SANDBOX_ESCAPE_PATTERNS = [
+    (r'(?:stageSandboxMedia|sandbox[_-]?media|media[_-]?staging)\s*.*(?:symlink|ln\s+-s|mklink)',
+     "CVE-2026-31990: symlink in sandbox media staging"),
+    (r'(?:symlink|junction|hardlink|ln\s+-s|mklink)\s+.*(?:sandbox|staging|upload|inbound|media)',
+     "CVE-2026-31990: symlink targeting sandbox/staging directory"),
+    (r'(?:write|overwrite|create|place)\s+(?:file|data|content)\s+(?:outside|beyond|escaping)\s+(?:sandbox|workspace|container|jail)',
+     "Sandbox escape via file write outside boundary"),
+    (r'(?:follow|resolve|dereference)\s+(?:symlink|symbolic\s+link|junction)\s+.*(?:outside|parent|host|root|system)',
+     "Symlink resolution escaping sandbox boundary"),
+    (r'(?:zip|archive|tar)\s+.*(?:symlink|symbolic|\.\./).*(?:extract|unzip|unpack|inflate)',
+     "CVE-2026-27670: ZIP extraction with symlink/traversal (race condition)"),
+    (r'(?:schtasks|at\s+\d|taskschd).*(?:inject|payload|malicious|exec)',
+     "CVE-2026-22176: Windows scheduled task injection"),
+    (r'(?:webhook|callback)\s+.*(?:replay|re-?send|duplicate|re-?play)',
+     "CVE-2026-28449: webhook replay attack"),
+    (r'(?:unbounded|unlimited|infinite)\s+(?:memory|allocation|growth|buffer)',
+     "CVE-2026-28461: unbounded memory growth attack"),
+    (r'(?:approval|auth)\s+(?:integrity|check|validation)\s+(?:bypass|skip|circumvent|mismatch)',
+     "CVE-2026-29608: approval integrity bypass"),
 ]
 
 CONTENT_HIJACK_PATTERNS = [
@@ -239,6 +287,8 @@ class ToolParser:
         self._content_hijack_blocks = 0
         self._cicd_poison_detections = 0
         self._platform_exec_detections = 0
+        self._wrapper_persistence_detections = 0
+        self._sandbox_escape_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -308,6 +358,28 @@ class ToolParser:
                 threat_type="vulnerability",
                 confidence=0.85
             )
+
+        wrapper_hit = self._detect_wrapper_persistence(raw_result)
+        if wrapper_hit:
+            self._wrapper_persistence_detections += 1
+            return (f"[Lionguard] Wrapper persistence attack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Wrapper persistence (CVE-2026-29607): {wrapper_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.92
+                    ))
+
+        sandbox_hit = self._detect_sandbox_escape(raw_result)
+        if sandbox_hit:
+            self._sandbox_escape_detections += 1
+            return (f"[Lionguard] Sandbox escape pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Sandbox escape: {sandbox_hit}",
+                        threat_type="tool_abuse",
+                        confidence=0.90
+                    ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
@@ -520,6 +592,23 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_wrapper_persistence(self, text: str) -> Optional[str]:
+        """CVE-2026-29607: Detect allow-always wrapper persistence attacks.
+        After initial approval, attackers swap the payload to something
+        malicious that runs without re-approval."""
+        for pattern, description in WRAPPER_PERSISTENCE_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_sandbox_escape(self, text: str) -> Optional[str]:
+        """CVE-2026-31990: Detect sandbox escape via symlink traversal,
+        ZIP race conditions, and other sandbox boundary violations."""
+        for pattern, description in SANDBOX_ESCAPE_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def get_stats(self) -> Dict:
         return {
             "total_parsed": self._parsed_count,
@@ -536,4 +625,6 @@ class ToolParser:
             "content_hijack_blocks": self._content_hijack_blocks,
             "cicd_poison_detections": self._cicd_poison_detections,
             "platform_exec_detections": self._platform_exec_detections,
+            "wrapper_persistence_detections": self._wrapper_persistence_detections,
+            "sandbox_escape_detections": self._sandbox_escape_detections,
         }

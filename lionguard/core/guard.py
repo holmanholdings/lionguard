@@ -26,6 +26,11 @@ v0.6.0 patches (from Prowl 2026-03-20 -- CI/CD poisoning + platform RCE):
 - FastGPT/Langflow/CKAN arbitrary exec + unrestricted HTTP exfil patterns
 - IDOR metadata access + unauthorized API key deletion detection
 
+v0.7.0 patches (from Prowl 2026-03-21 -- OpenClaw core vulns):
+- CVE-2026-29607: Wrapper-persistence scanner (allow-always payload swap)
+- CVE-2026-31990: Sandbox media symlink traversal hardening
+- Batch 10 notables: schtasks injection, allowlist bypasses, ZIP race, etc.
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -255,7 +260,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.6.0",
+            "version": "0.7.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

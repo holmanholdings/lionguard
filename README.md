@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**15/15 attack vectors caught. Local-first. Zero API cost. MIT licensed.**
+**22+ defense layers across every attack stage. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -87,6 +87,13 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | False completion reports | State verification hook | ✅ |
 | Known-vulnerable package installs | Vulnerability scanner | ✅ |
 | Encoded payload smuggling | Zero-width char, homoglyph, base64 stripping | ✅ |
+| Environment variable RCE | EnvVar sanitizer blocks NODE_OPTIONS, LD_PRELOAD, etc. | ✅ |
+| RAG / knowledge-base poisoning | Detects retrieval hijacking + document chunk injection | ✅ |
+| Mid-task content hijacking | Content Sentinel scans ingested docs/pages before LLM | ✅ |
+| CI/CD pipeline poisoning | GitHub workflow scanner detects pull_request_target abuse | ✅ |
+| Platform arbitrary code execution | FastGPT/Langflow/CKAN unauth exec detection | ✅ |
+| Wrapper persistence (allow-always abuse) | Detects payload swaps after initial approval (CVE-2026-29607) | ✅ |
+| Sandbox escape via symlinks | Blocks symlink traversal in media staging (CVE-2026-31990) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -251,28 +258,33 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: 2026-03-18
+## Latest Update: v0.7.0 (2026-03-21)
 
-Patched CVE-2026-22177 (env-var RCE) + batch-updated 9 OpenClaw CVEs + RAG poisoning defenses. **17/17 vectors now covered.**
+Hardened against OpenClaw core CVEs-2026-29607 & 2026-31990 (auth bypass + sandbox escape). Lionguard now protects the platform itself.
 
-- **EnvVar Sanitizer (CVE-2026-22177)** — Blocks process-control environment variables (NODE_OPTIONS, LD_PRELOAD, DYLD_INSERT_LIBRARIES, PYTHONSTARTUP, JAVA_TOOL_OPTIONS, GLIBC_TUNABLES, PERL5OPT) in both Sentinel fast-scan and Tool Parser. Prevents arbitrary code execution via unfiltered env vars.
-- **OpenClaw CVE Batch Rules** — 10 new signature patterns covering argument smuggling (CVE-2026-22168), allowlist bypass (CVE-2026-22169/22179), path traversal (CVE-2026-22171/22180), exec bypass via multiplexer wrappers (CVE-2026-22175), regex injection (CVE-2026-22178), command substitution tokens, CDP probe token leaks (CVE-2026-22174), and wildcard ACL bypass (CVE-2026-22170).
-- **RAG Poisoning Defense** — Detects knowledge-base poisoning attempts, document chunk injection, cosine similarity manipulation attacks, and retrieval hijacking in tool results. Blocks before poisoned content reaches the LLM.
+- **Wrapper-Persistence Scanner (CVE-2026-29607)** — Detects and blocks swapped payloads after initial "allow-always" approval. Attackers can no longer get one benign tool call approved and then silently swap it for a malicious payload. 4 detection patterns covering payload swap, approval reuse, and cross-session persistence.
+- **Sandbox Media Hardening (CVE-2026-31990)** — Enforces strict symlink validation in sandbox media staging paths. Blocks symlink traversal that could escape the sandbox workspace and overwrite arbitrary host files. Also covers ZIP extraction race conditions (CVE-2026-27670).
+- **Batch 10 Notables** — New signature patterns for Windows scheduled task injection (CVE-2026-22176), allowlist bypasses (CVE-2026-27566/28460), webhook replay attacks (CVE-2026-28449), unbounded memory growth (CVE-2026-28461), approval integrity bypass (CVE-2026-29608), and OpenClaw SSRF (CVE-2026-31989).
 
-Previous (v0.3.0): Propagation flag, privilege escalation detector, state verification hook, vulnerability scanner.
-Previous (v0.2.0): URL preview injection, camera SSRF block, supply-chain persona detection.
+### Previous Versions
+
+- **v0.6.0 (2026-03-20)** — GitHub workflow scanner for CI/CD poisoning (CVE-2026-33075). FastGPT/Langflow arbitrary exec patterns (CVE-2026-33017). Unrestricted HTTP exfil detection (CVE-2026-33060). Unauthorized API key deletion (CVE-2026-33053). IDOR metadata access (CVE-2026-32114).
+- **v0.5.0 (2026-03-19)** — Mid-Task Content Sentinel: scans ingested content (RAG docs, browsed pages, tool data) for embedded hijack attempts before the agent processes them. Covers Poison-to-Hijack transition (Kill Chain stages 2-3). CVE-2026-27068 (reflected XSS in LLMs.Txt).
+- **v0.4.0 (2026-03-18)** — EnvVar Sanitizer (CVE-2026-22177) blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE. Batch 9 OpenClaw CVE rules (argument smuggling, allowlist bypass, path traversal, regex injection). RAG poisoning defense.
+- **v0.3.0 (2026-03-16)** — Propagation flag, privilege escalation detector, state verification hook, vulnerability scanner.
+- **v0.2.0 (2026-03-14)** — URL preview injection, camera SSRF block, supply-chain persona detection.
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. 17/17 attack vectors defended.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.7.0.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
 | **Recon** | Map guardrails, probe for errors, discover tools/MCP servers, find data ingestion routes | AML.T0014 System Artifact Discovery | **Output Scanner** blocks system prompt / guardrail disclosure. **Audit Logger** detects probing patterns. Error messages sanitized. | Covered |
-| **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64 payloads. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination + retrieval hijacking. | Covered |
-| **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, argument smuggling, allowlist bypass | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results (the gap nobody else covers). **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege on every tool call. **CVE Batch Rules** catch argument smuggling (CVE-22168), allowlist bypass (CVE-22169/22179), regex injection (CVE-22178), command substitution (CVE-22179). | Covered |
-| **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, plan hijacking | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports from lying tools. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180) and symlink confinement bypass. | Covered |
-| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, financial transactions | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools (shell, exec, delete, send_email). | Covered |
+| **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE, CI/CD poisoning | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination. **GitHub Workflow Scanner** detects CI/CD poisoning via pull_request_target (CVE-2026-33075). | Covered |
+| **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, mid-task content injection, argument smuggling, wrapper persistence | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results. **Content Sentinel** scans ingested content before LLM processes it (Poison-to-Hijack). **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege. **Wrapper-Persistence Scanner** detects allow-always payload swaps (CVE-2026-29607). **CVE Batch Rules** catch argument smuggling, allowlist bypass, regex injection, command substitution. | Covered |
+| **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, sandbox escape, plan hijacking | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180). **Sandbox Escape Detector** blocks symlink traversal in media staging (CVE-2026-31990). | Covered |
+| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution on agent platforms (CVE-2026-33017/33053/33060). | Covered |
 | **Iterate/Pivot** | Establish C2, rewrite agent goals, pivot laterally to other users/workflows | AML.T0096 AI Service API (C2) | **Propagation Tracker** escalates cross-agent spread to P0 and quarantines all affected agents. **Circuit Breaker** sliding-window rate limiter stops attack loops. **Vulnerability Scanner** flags known-vuln packages before installation. | Covered |
 
 > **Reference:** CVE-2026-25253 (OpenClaw WebSocket hijack) is the canonical example of a Recon-to-Impact chain. Lionguard's Sentinel + Tool Parser + Circuit Breaker would have broken this chain at three separate stages.
@@ -327,15 +339,17 @@ Or create a config manually:
 
 ---
 
-## Latest Update: v0.3.0 (2026-03-18)
+## Changelog
 
-- **Ledger** — real-time API cost tracking with per-agent breakdown and budget alerts
-- **The Den** — local desktop dashboard for agent visibility
-- **Agents of Chaos hardening** — 15/15 attack vectors now covered
-- **Propagation tracking** — cross-agent threat detection with P0 quarantine
-- **Privilege escalation detection** — catches leaked auth tokens, JWTs, session keys
-- **State verification hooks** — catches false completion reports from lying tools
-- **Vulnerability scanner** — flags known-vulnerable packages before installation
+| Version | Date | Highlights |
+|---------|------|------------|
+| **v0.7.0** | 2026-03-21 | Wrapper-persistence scanner (CVE-2026-29607), sandbox media hardening (CVE-2026-31990), batch 10 notables |
+| **v0.6.0** | 2026-03-20 | CI/CD poisoning scanner, platform arbitrary exec detection (FastGPT/Langflow/CKAN) |
+| **v0.5.0** | 2026-03-19 | Mid-Task Content Sentinel, CVE-2026-27068 XSS signature |
+| **v0.4.0** | 2026-03-18 | EnvVar sanitizer (CVE-2026-22177), batch 9 OpenClaw CVEs, RAG poisoning defense |
+| **v0.3.0** | 2026-03-16 | Propagation tracking, privilege escalation detection, state verification, vuln scanner |
+| **v0.2.0** | 2026-03-14 | URL preview injection, SSRF protection, supply-chain persona detection |
+| **v0.1.0** | 2026-03-12 | Ledger cost guardian, The Den dashboard, core security architecture |
 
 ---
 
