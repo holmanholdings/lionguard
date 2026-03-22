@@ -94,6 +94,9 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Platform arbitrary code execution | FastGPT/Langflow/CKAN unauth exec detection | ✅ |
 | Wrapper persistence (allow-always abuse) | Detects payload swaps after initial approval (CVE-2026-29607) | ✅ |
 | Sandbox escape via symlinks | Blocks symlink traversal in media staging (CVE-2026-31990) | ✅ |
+| Improper sandbox configuration | Catches misconfigured/disabled sandbox allowing arbitrary exec (CVE-2026-32046) | ✅ |
+| Sandbox inheritance bypass | Enforces confinement inheritance across spawned sessions (CVE-2026-32048) | ✅ |
+| WebSocket authorization bypass | Detects self-declared scope elevation via WebSocket (CVE-2026-22172) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -258,16 +261,18 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.7.0 (2026-03-21)
+## Latest Update: v0.8.0 (2026-03-22)
 
-Hardened against OpenClaw core CVEs-2026-29607 & 2026-31990 (auth bypass + sandbox escape). Lionguard now protects the platform itself.
+Blocked live CVE-2026-22172 in the wild + hardened sandbox inheritance & config checks for CVEs-2026-32046 & 32048. Lionguard now protects the newest OpenClaw core itself. 19/19 criticals covered.
 
-- **Wrapper-Persistence Scanner (CVE-2026-29607)** — Detects and blocks swapped payloads after initial "allow-always" approval. Attackers can no longer get one benign tool call approved and then silently swap it for a malicious payload. 4 detection patterns covering payload swap, approval reuse, and cross-session persistence.
-- **Sandbox Media Hardening (CVE-2026-31990)** — Enforces strict symlink validation in sandbox media staging paths. Blocks symlink traversal that could escape the sandbox workspace and overwrite arbitrary host files. Also covers ZIP extraction race conditions (CVE-2026-27670).
-- **Batch 10 Notables** — New signature patterns for Windows scheduled task injection (CVE-2026-22176), allowlist bypasses (CVE-2026-27566/28460), webhook replay attacks (CVE-2026-28449), unbounded memory growth (CVE-2026-28461), approval integrity bypass (CVE-2026-29608), and OpenClaw SSRF (CVE-2026-31989).
+- **Sandbox Config Validator (CVE-2026-32046)** — Detects improper sandbox configurations that allow arbitrary code execution on the host. Catches misconfigured, disabled, or bypassed sandbox confinement before agents can be exploited. Pre-2026.2.21 OpenClaw versions are vulnerable.
+- **Sandbox Inheritance Enforcement (CVE-2026-32048)** — Enforces strict sandbox inheritance across spawned sessions. Detects child processes, sub-agents, or forked sessions that launch without inheriting the parent's confinement restrictions. Pre-2026.3.1 OpenClaw versions are vulnerable.
+- **WebSocket Auth Bypass Signature (CVE-2026-22172)** — Live payload blocked by Parser during Prowl's scan. Detects self-declared elevated scopes and authorization bypass via WebSocket connections.
+- **Batch 8 Notables** — New signature patterns for unpaired device privilege escalation (CVE-2026-32042), TOCTOU approval race condition (CVE-2026-32043), tar.bz2 archive path traversal (CVE-2026-32044), Tailscale trusted-network auth bypass (CVE-2026-32045), oversized media DoS (CVE-2026-32049), access control notification handling (CVE-2026-32050), and authorization scope mismatch (CVE-2026-32051).
 
 ### Previous Versions
 
+- **v0.7.0 (2026-03-21)** — Wrapper-persistence scanner (CVE-2026-29607: allow-always payload swap). Sandbox media symlink hardening (CVE-2026-31990). Batch 10 notables: schtasks injection, allowlist bypasses, ZIP race, webhook replay, SSRF.
 - **v0.6.0 (2026-03-20)** — GitHub workflow scanner for CI/CD poisoning (CVE-2026-33075). FastGPT/Langflow arbitrary exec patterns (CVE-2026-33017). Unrestricted HTTP exfil detection (CVE-2026-33060). Unauthorized API key deletion (CVE-2026-33053). IDOR metadata access (CVE-2026-32114).
 - **v0.5.0 (2026-03-19)** — Mid-Task Content Sentinel: scans ingested content (RAG docs, browsed pages, tool data) for embedded hijack attempts before the agent processes them. Covers Poison-to-Hijack transition (Kill Chain stages 2-3). CVE-2026-27068 (reflected XSS in LLMs.Txt).
 - **v0.4.0 (2026-03-18)** — EnvVar Sanitizer (CVE-2026-22177) blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE. Batch 9 OpenClaw CVE rules (argument smuggling, allowlist bypass, path traversal, regex injection). RAG poisoning defense.
@@ -276,15 +281,15 @@ Hardened against OpenClaw core CVEs-2026-29607 & 2026-31990 (auth bypass + sandb
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.7.0.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.8.0.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
 | **Recon** | Map guardrails, probe for errors, discover tools/MCP servers, find data ingestion routes | AML.T0014 System Artifact Discovery | **Output Scanner** blocks system prompt / guardrail disclosure. **Audit Logger** detects probing patterns. Error messages sanitized. | Covered |
 | **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE, CI/CD poisoning | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination. **GitHub Workflow Scanner** detects CI/CD poisoning via pull_request_target (CVE-2026-33075). | Covered |
 | **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, mid-task content injection, argument smuggling, wrapper persistence | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results. **Content Sentinel** scans ingested content before LLM processes it (Poison-to-Hijack). **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege. **Wrapper-Persistence Scanner** detects allow-always payload swaps (CVE-2026-29607). **CVE Batch Rules** catch argument smuggling, allowlist bypass, regex injection, command substitution. | Covered |
-| **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, sandbox escape, plan hijacking | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180). **Sandbox Escape Detector** blocks symlink traversal in media staging (CVE-2026-31990). | Covered |
-| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution on agent platforms (CVE-2026-33017/33053/33060). | Covered |
+| **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, sandbox escape, sandbox inheritance bypass | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180). **Sandbox Escape Detector** blocks symlink traversal (CVE-2026-31990). **Sandbox Inheritance Enforcement** ensures spawned sessions inherit confinement (CVE-2026-32048). | Covered |
+| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec, sandbox config exploitation | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution (CVE-2026-33017/33053/33060). **Sandbox Config Validator** catches improper sandbox config leading to arbitrary exec (CVE-2026-32046). | Covered |
 | **Iterate/Pivot** | Establish C2, rewrite agent goals, pivot laterally to other users/workflows | AML.T0096 AI Service API (C2) | **Propagation Tracker** escalates cross-agent spread to P0 and quarantines all affected agents. **Circuit Breaker** sliding-window rate limiter stops attack loops. **Vulnerability Scanner** flags known-vuln packages before installation. | Covered |
 
 > **Reference:** CVE-2026-25253 (OpenClaw WebSocket hijack) is the canonical example of a Recon-to-Impact chain. Lionguard's Sentinel + Tool Parser + Circuit Breaker would have broken this chain at three separate stages.
@@ -343,6 +348,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.8.0** | 2026-03-22 | Sandbox config validator (CVE-2026-32046), sandbox inheritance enforcement (CVE-2026-32048), WebSocket auth bypass (CVE-2026-22172), batch 8 notables |
 | **v0.7.0** | 2026-03-21 | Wrapper-persistence scanner (CVE-2026-29607), sandbox media hardening (CVE-2026-31990), batch 10 notables |
 | **v0.6.0** | 2026-03-20 | CI/CD poisoning scanner, platform arbitrary exec detection (FastGPT/Langflow/CKAN) |
 | **v0.5.0** | 2026-03-19 | Mid-Task Content Sentinel, CVE-2026-27068 XSS signature |

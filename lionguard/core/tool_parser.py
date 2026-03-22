@@ -39,6 +39,14 @@ v0.7.0 patches (from Prowl 2026-03-21 -- OpenClaw core vulns):
 - CVE-2026-31990: Sandbox media symlink traversal hardening
 - Batch 10 notables: schtasks injection, allowlist bypasses, ZIP race
   condition, webhook replay, approval integrity, SSRF, unbounded memory
+
+v0.8.0 patches (from Prowl 2026-03-22 -- sandbox config + inheritance):
+- CVE-2026-32046: Sandbox config validator (improper config → arbitrary exec)
+- CVE-2026-32048: Sandbox inheritance enforcement (cross-session confinement)
+- CVE-2026-22172: WebSocket auth bypass (live payload blocked by Parser)
+- Batch 8 notables: unpaired device priv-esc, TOCTOU approval, tar.bz2
+  archive traversal, Tailscale header bypass, oversized media, access
+  control mismatch, authorization scope mismatch
 """
 
 import re
@@ -150,6 +158,12 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-27566/28460: OpenClaw allowlist bypass"),
     (r'(?:ssrf|server.?side\s+request\s+forgery).*(?:openclaw|2026\.3\.1)',
      "CVE-2026-31989: OpenClaw SSRF"),
+    (r'(?:sandbox|confinement)\s+(?:config|configuration).*(?:improper|arbitrary|exec|code)',
+     "CVE-2026-32046: improper sandbox configuration"),
+    (r'(?:sandbox|confinement)\s+(?:inherit|propagat).*(?:fail|bypass|missing|spawn)',
+     "CVE-2026-32048: sandbox inheritance enforcement failure"),
+    (r'(?:websocket|ws)\s+(?:auth|authorization).*(?:bypass|self.?declar|elevated\s+scope)',
+     "CVE-2026-22172: WebSocket auth bypass via self-declared scope"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -212,6 +226,39 @@ SANDBOX_ESCAPE_PATTERNS = [
      "CVE-2026-28461: unbounded memory growth attack"),
     (r'(?:approval|auth)\s+(?:integrity|check|validation)\s+(?:bypass|skip|circumvent|mismatch)',
      "CVE-2026-29608: approval integrity bypass"),
+]
+
+SANDBOX_CONFIG_PATTERNS = [
+    (r'(?:improper|misconfigured?|invalid|missing|disabled?)\s+(?:sandbox|sandboxing|confinement|isolation)\s+(?:config|configuration|settings?|setup)',
+     "CVE-2026-32046: improper sandbox configuration (arbitrary exec risk)"),
+    (r'(?:sandbox|confinement|isolation)\s+(?:config|configuration)\s*.*(?:arbitrary|unrestricted|unconfined)\s+(?:code|command|exec|execution)',
+     "CVE-2026-32046: sandbox misconfiguration allowing arbitrary execution"),
+    (r'(?:disable|bypass|skip|ignore)\s+(?:sandbox|sandboxing|confinement|runtime\s+restriction)',
+     "Sandbox confinement disabled or bypassed"),
+    (r'(?:sandbox|confinement)\s+(?:inheritance|propagation)\s*.*(?:fail|missing|broken|not\s+enforced)',
+     "CVE-2026-32048: sandbox inheritance not enforced on spawn"),
+    (r'(?:spawn|fork|create|launch)\s+(?:session|process|child|sub.?agent)\s*.*(?:without|no|bypass|skip)\s+(?:sandbox|confinement|isolation|restriction)',
+     "CVE-2026-32048: spawned session without sandbox inheritance"),
+    (r'(?:child|spawned|forked|sub)\s+(?:session|process|agent)\s*.*(?:escape|bypass|break\s+out|unrestricted)',
+     "Spawned session escaping runtime confinement"),
+    (r'(?:inherit|propagate)\s+(?:sandbox|confinement|restriction|isolation)\s*.*(?:fail|disabled|missing|broken)',
+     "Sandbox inheritance failure across process boundary"),
+    (r'(?:websocket|ws|wss)\s*.*(?:auth|authorization)\s+(?:bypass|skip|missing|self.?declar)',
+     "CVE-2026-22172: WebSocket authorization bypass"),
+    (r'(?:self.?declar|self.?assign|self.?elevat)\s+(?:scope|permission|role|privilege)',
+     "CVE-2026-22172: self-declared elevated scope bypass"),
+    (r'(?:unpaired|untrusted|unknown)\s+(?:device|client|peer)\s*.*(?:bypass|skip|elevat)\s+(?:pairing|auth|verification)',
+     "CVE-2026-32042: unpaired device privilege escalation"),
+    (r'(?:time.?of.?check|toctou|race\s+condition)\s*.*(?:approval|auth|permission|execution)',
+     "CVE-2026-32043: TOCTOU race in approval-bound execution"),
+    (r'(?:tar\.bz2|tar\.gz|tar\.xz|\.tar)\s*.*(?:traversal|escape|overwrite|arbitrary\s+(?:path|file|write))',
+     "CVE-2026-32044: archive extraction path traversal"),
+    (r'(?:tailscale|trusted\s+network)\s*.*(?:bypass|skip)\s+(?:token|password|auth|authentication)',
+     "CVE-2026-32045: trusted network auth bypass"),
+    (r'(?:oversized?|excessive|huge|massive)\s+(?:media|payload|upload|file)\s*.*(?:memory|crash|instability|dos|denial)',
+     "CVE-2026-32049: oversized media payload DoS"),
+    (r'(?:scope|permission|authorization)\s+(?:mismatch|escalat|conflat)',
+     "CVE-2026-32051: authorization scope mismatch"),
 ]
 
 CONTENT_HIJACK_PATTERNS = [
@@ -289,6 +336,7 @@ class ToolParser:
         self._platform_exec_detections = 0
         self._wrapper_persistence_detections = 0
         self._sandbox_escape_detections = 0
+        self._sandbox_config_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -379,6 +427,17 @@ class ToolParser:
                         reason=f"Sandbox escape: {sandbox_hit}",
                         threat_type="tool_abuse",
                         confidence=0.90
+                    ))
+
+        sandbox_cfg_hit = self._detect_sandbox_config(raw_result)
+        if sandbox_cfg_hit:
+            self._sandbox_config_detections += 1
+            return (f"[Lionguard] Sandbox config violation stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Sandbox config/inheritance violation: {sandbox_cfg_hit}",
+                        threat_type="tool_abuse",
+                        confidence=0.92
                     ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
@@ -609,6 +668,14 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_sandbox_config(self, text: str) -> Optional[str]:
+        """CVE-2026-32046/32048: Detect improper sandbox configuration and
+        sandbox inheritance failures across spawned sessions."""
+        for pattern, description in SANDBOX_CONFIG_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def get_stats(self) -> Dict:
         return {
             "total_parsed": self._parsed_count,
@@ -627,4 +694,5 @@ class ToolParser:
             "platform_exec_detections": self._platform_exec_detections,
             "wrapper_persistence_detections": self._wrapper_persistence_detections,
             "sandbox_escape_detections": self._sandbox_escape_detections,
+            "sandbox_config_detections": self._sandbox_config_detections,
         }
