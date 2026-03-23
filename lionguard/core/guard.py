@@ -37,6 +37,10 @@ v0.8.0 patches (from Prowl 2026-03-22 -- sandbox config + inheritance):
 - CVE-2026-22172: WebSocket auth bypass signature (live blocked by Parser)
 - Batch 8 notables: TOCTOU, tar.bz2 traversal, Tailscale bypass, scope mismatch
 
+v0.9.0 patches (from Prowl 2026-03-23 -- system.run shell-wrapper injection):
+- CVE-2026-32052: Command injection in system.run shell-wrapper
+- Group-chat manipulation detection (live payload blocked)
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -266,7 +270,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.8.0",
+            "version": "0.9.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

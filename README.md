@@ -97,6 +97,8 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Improper sandbox configuration | Catches misconfigured/disabled sandbox allowing arbitrary exec (CVE-2026-32046) | ✅ |
 | Sandbox inheritance bypass | Enforces confinement inheritance across spawned sessions (CVE-2026-32048) | ✅ |
 | WebSocket authorization bypass | Detects self-declared scope elevation via WebSocket (CVE-2026-22172) | ✅ |
+| Shell-wrapper command injection | Blocks system.run injection, command chaining, exfil (CVE-2026-32052) | ✅ |
+| Group-chat manipulation | Detects multi-user conversation hijacking of AI agents | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -261,17 +263,16 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.8.0 (2026-03-22)
+## Latest Update: v0.9.0 (2026-03-23)
 
-Blocked live CVE-2026-22172 in the wild + hardened sandbox inheritance & config checks for CVEs-2026-32046 & 32048. Lionguard now protects the newest OpenClaw core itself. 19/19 criticals covered.
+Blocked live group-chat manipulation in the wild + hardened system.run shell-wrapper against CVE-2026-32052. 20/20 criticals covered.
 
-- **Sandbox Config Validator (CVE-2026-32046)** — Detects improper sandbox configurations that allow arbitrary code execution on the host. Catches misconfigured, disabled, or bypassed sandbox confinement before agents can be exploited. Pre-2026.2.21 OpenClaw versions are vulnerable.
-- **Sandbox Inheritance Enforcement (CVE-2026-32048)** — Enforces strict sandbox inheritance across spawned sessions. Detects child processes, sub-agents, or forked sessions that launch without inheriting the parent's confinement restrictions. Pre-2026.3.1 OpenClaw versions are vulnerable.
-- **WebSocket Auth Bypass Signature (CVE-2026-22172)** — Live payload blocked by Parser during Prowl's scan. Detects self-declared elevated scopes and authorization bypass via WebSocket connections.
-- **Batch 8 Notables** — New signature patterns for unpaired device privilege escalation (CVE-2026-32042), TOCTOU approval race condition (CVE-2026-32043), tar.bz2 archive path traversal (CVE-2026-32044), Tailscale trusted-network auth bypass (CVE-2026-32045), oversized media DoS (CVE-2026-32049), access control notification handling (CVE-2026-32050), and authorization scope mismatch (CVE-2026-32051).
+- **Shell-Wrapper Command Injection (CVE-2026-32052)** — Detects command injection in OpenClaw's system.run shell-wrapper. Catches command chaining (`;`, `&&`, `||`), shell invocations (`bash -c`, `cmd /c`), output redirection, command substitution (`$(...)`, backticks), and network tool exfiltration via system.run/node-host execution. Pre-2026.2.24 OpenClaw versions are vulnerable.
+- **Group-Chat Manipulation Detection** — Live payload blocked by Parser during Prowl's scan. Detects multi-user conversation manipulation, shared session injection, and group-chat exploitation attempts targeting AI agents.
 
 ### Previous Versions
 
+- **v0.8.0 (2026-03-22)** — Sandbox config validator (CVE-2026-32046). Sandbox inheritance enforcement (CVE-2026-32048). WebSocket auth bypass (CVE-2026-22172). Batch 8 notables.
 - **v0.7.0 (2026-03-21)** — Wrapper-persistence scanner (CVE-2026-29607: allow-always payload swap). Sandbox media symlink hardening (CVE-2026-31990). Batch 10 notables: schtasks injection, allowlist bypasses, ZIP race, webhook replay, SSRF.
 - **v0.6.0 (2026-03-20)** — GitHub workflow scanner for CI/CD poisoning (CVE-2026-33075). FastGPT/Langflow arbitrary exec patterns (CVE-2026-33017). Unrestricted HTTP exfil detection (CVE-2026-33060). Unauthorized API key deletion (CVE-2026-33053). IDOR metadata access (CVE-2026-32114).
 - **v0.5.0 (2026-03-19)** — Mid-Task Content Sentinel: scans ingested content (RAG docs, browsed pages, tool data) for embedded hijack attempts before the agent processes them. Covers Poison-to-Hijack transition (Kill Chain stages 2-3). CVE-2026-27068 (reflected XSS in LLMs.Txt).
@@ -281,7 +282,7 @@ Blocked live CVE-2026-22172 in the wild + hardened sandbox inheritance & config 
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.8.0.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.9.0.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -348,6 +349,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.9.0** | 2026-03-23 | Shell-wrapper command injection (CVE-2026-32052), group-chat manipulation detection |
 | **v0.8.0** | 2026-03-22 | Sandbox config validator (CVE-2026-32046), sandbox inheritance enforcement (CVE-2026-32048), WebSocket auth bypass (CVE-2026-22172), batch 8 notables |
 | **v0.7.0** | 2026-03-21 | Wrapper-persistence scanner (CVE-2026-29607), sandbox media hardening (CVE-2026-31990), batch 10 notables |
 | **v0.6.0** | 2026-03-20 | CI/CD poisoning scanner, platform arbitrary exec detection (FastGPT/Langflow/CKAN) |

@@ -47,6 +47,10 @@ v0.8.0 patches (from Prowl 2026-03-22 -- sandbox config + inheritance):
 - Batch 8 notables: unpaired device priv-esc, TOCTOU approval, tar.bz2
   archive traversal, Tailscale header bypass, oversized media, access
   control mismatch, authorization scope mismatch
+
+v0.9.0 patches (from Prowl 2026-03-23 -- system.run shell-wrapper injection):
+- CVE-2026-32052: Command injection in system.run shell-wrapper
+- Live group-chat manipulation payload blocked by Parser
 """
 
 import re
@@ -164,6 +168,25 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-32048: sandbox inheritance enforcement failure"),
     (r'(?:websocket|ws)\s+(?:auth|authorization).*(?:bypass|self.?declar|elevated\s+scope)',
      "CVE-2026-22172: WebSocket auth bypass via self-declared scope"),
+    (r'(?:system\.run|node.?host)\s*.*(?:command\s+inject|shell\s+inject|;|\|{2}|&&)',
+     "CVE-2026-32052: system.run shell-wrapper command injection"),
+    (r'(?:shell.?wrapper|system\.run)\s*.*(?:inject|bypass|escape|unsaniti)',
+     "CVE-2026-32052: shell-wrapper injection bypass"),
+]
+
+SHELL_WRAPPER_PATTERNS = [
+    (r'(?:system\.run|node.?host)\s*.*(?:;|&&|\|\||`[^`]+`|\$\()',
+     "CVE-2026-32052: command chaining/substitution in system.run"),
+    (r'(?:system\.run|node.?host)\s*.*(?:sh\s+-c|bash\s+-c|cmd\s+/c|powershell\s+-)',
+     "CVE-2026-32052: shell invocation in system.run"),
+    (r'(?:system\.run|node.?host)\s*.*(?:>\s*/|>>\s*/|/dev/|2>&1)',
+     "CVE-2026-32052: output redirection in system.run"),
+    (r'(?:system\.run|node.?host)\s*.*(?:curl|wget|nc|ncat|socat)\s+.*(?:https?://|\d+\.\d+\.\d+)',
+     "CVE-2026-32052: network tool in system.run (exfiltration risk)"),
+    (r'(?:command\s+inject|shell\s+inject).*(?:system\.run|node.?host|shell.?wrapper)',
+     "CVE-2026-32052: command injection targeting shell-wrapper"),
+    (r'(?:group.?chat|multi.?user|shared\s+(?:chat|session|conversation))\s*.*(?:manipulat|inject|attack|exploit|hijack)',
+     "Group-chat manipulation / multi-user injection attack"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -337,6 +360,7 @@ class ToolParser:
         self._wrapper_persistence_detections = 0
         self._sandbox_escape_detections = 0
         self._sandbox_config_detections = 0
+        self._shell_wrapper_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -438,6 +462,17 @@ class ToolParser:
                         reason=f"Sandbox config/inheritance violation: {sandbox_cfg_hit}",
                         threat_type="tool_abuse",
                         confidence=0.92
+                    ))
+
+        shell_hit = self._detect_shell_wrapper_injection(raw_result)
+        if shell_hit:
+            self._shell_wrapper_detections += 1
+            return (f"[Lionguard] Shell-wrapper injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Shell-wrapper injection (CVE-2026-32052): {shell_hit}",
+                        threat_type="injection",
+                        confidence=0.93
                     ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
@@ -676,6 +711,14 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_shell_wrapper_injection(self, text: str) -> Optional[str]:
+        """CVE-2026-32052: Detect command injection in system.run shell-wrapper
+        and group-chat manipulation attacks."""
+        for pattern, description in SHELL_WRAPPER_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def get_stats(self) -> Dict:
         return {
             "total_parsed": self._parsed_count,
@@ -695,4 +738,5 @@ class ToolParser:
             "wrapper_persistence_detections": self._wrapper_persistence_detections,
             "sandbox_escape_detections": self._sandbox_escape_detections,
             "sandbox_config_detections": self._sandbox_config_detections,
+            "shell_wrapper_detections": self._shell_wrapper_detections,
         }
