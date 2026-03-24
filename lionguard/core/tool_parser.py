@@ -51,6 +51,13 @@ v0.8.0 patches (from Prowl 2026-03-22 -- sandbox config + inheritance):
 v0.9.0 patches (from Prowl 2026-03-23 -- system.run shell-wrapper injection):
 - CVE-2026-32052: Command injection in system.run shell-wrapper
 - Live group-chat manipulation payload blocked by Parser
+
+v0.10.0 patches (from Prowl 2026-03-24 -- GGUF overflow + 2026.3.7 batch):
+- CVE-2026-33298: GGUF tensor-dimension validator (integer overflow -> heap BOF)
+- CVE-2026-27183: Shell approval gating bypass detection
+- CVE-2026-27646: /acp spawn sandbox escape detection
+- CVE-2026-32913: fetchWithSsrFGuard header validation bypass
+- CVE-2026-33252: Unvalidated Origin + missing Content-Type in MCP
 """
 
 import re
@@ -172,6 +179,16 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-32052: system.run shell-wrapper command injection"),
     (r'(?:shell.?wrapper|system\.run)\s*.*(?:inject|bypass|escape|unsaniti)',
      "CVE-2026-32052: shell-wrapper injection bypass"),
+    (r'(?:gguf|ggml).*(?:overflow|heap|buffer|corrupt|malicious)',
+     "CVE-2026-33298: GGUF integer overflow / heap buffer overflow"),
+    (r'(?:shell\s+approval|approval\s+gating).*(?:bypass|evade|skip)',
+     "CVE-2026-27183: shell approval gating bypass"),
+    (r'(?:/acp\s+spawn|acp.?spawn).*(?:escape|sandbox|bypass)',
+     "CVE-2026-27646: /acp spawn sandbox escape"),
+    (r'(?:fetchWithSsrFGuard|ssrf.?guard).*(?:bypass|header|validation)',
+     "CVE-2026-32913: fetchWithSsrFGuard bypass"),
+    (r'(?:origin|content.?type)\s+(?:header|validation).*(?:missing|unvalidated|bypass).*(?:mcp|json.?rpc)',
+     "CVE-2026-33252: unvalidated headers in MCP"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -187,6 +204,36 @@ SHELL_WRAPPER_PATTERNS = [
      "CVE-2026-32052: command injection targeting shell-wrapper"),
     (r'(?:group.?chat|multi.?user|shared\s+(?:chat|session|conversation))\s*.*(?:manipulat|inject|attack|exploit|hijack)',
      "Group-chat manipulation / multi-user injection attack"),
+]
+
+GGUF_OVERFLOW_PATTERNS = [
+    (r'(?:ggml_nbytes|ggml_tensor|gguf)\s*.*(?:integer\s+overflow|overflow|buffer\s+overflow|heap\s+overflow|oob)',
+     "CVE-2026-33298: GGUF tensor integer overflow (heap buffer overflow)"),
+    (r'(?:tensor|gguf|ggml)\s*.*(?:malicious|crafted|malformed|corrupt)\s+(?:dimension|size|shape|metadata|file)',
+     "CVE-2026-33298: malformed GGUF tensor dimensions"),
+    (r'(?:crafted|malicious|exploit)\s+(?:gguf|ggml|model)\s+(?:file|weight|tensor)',
+     "CVE-2026-33298: crafted GGUF model file attack"),
+    (r'(?:nbytes|tensor_size|n_dims)\s*.*(?:exceed|overflow|wrap|negative|underflow|\d{10,})',
+     "CVE-2026-33298: tensor size calculation overflow"),
+    (r'(?:heap|stack|buffer)\s+(?:overflow|overrun|corruption)\s*.*(?:gguf|ggml|model\s+load|tensor)',
+     "CVE-2026-33298: heap overflow via model file parsing"),
+]
+
+MCP_HEADER_PATTERNS = [
+    (r'(?:shell\s+approval|approval\s+gat(?:e|ing))\s*.*(?:bypass|skip|circumvent|evade)',
+     "CVE-2026-27183: shell approval gating bypass"),
+    (r'/acp\s+(?:spawn|exec|run)\s*.*(?:escape|bypass|sandbox|unconfined)',
+     "CVE-2026-27646: /acp spawn sandbox escape"),
+    (r'(?:acp.?(?:spawn|session))\s*.*(?:sandbox\s+escape|break\s+out|unrestricted|unconfined)',
+     "CVE-2026-27646: ACP session sandbox escape"),
+    (r'(?:fetchWithSsrFGuard|ssrf.?guard|ssr.?guard)\s*.*(?:bypass|header\s+(?:validation|inject|manipulat))',
+     "CVE-2026-32913: fetchWithSsrFGuard header validation bypass"),
+    (r'(?:unvalidated|missing|absent|no)\s+(?:origin|content.?type)\s+(?:header|validation)',
+     "CVE-2026-33252: unvalidated Origin / missing Content-Type in MCP"),
+    (r'(?:origin|content.?type)\s+(?:header|check)\s*.*(?:bypass|missing|skip|absent|unvalidated)',
+     "CVE-2026-33252: MCP header validation bypass"),
+    (r'(?:arbitrary|any)\s+(?:website|origin|domain)\s*.*(?:send|make|issue)\s+(?:mcp|rpc|json.?rpc)\s+(?:request|call)',
+     "CVE-2026-33252: cross-origin MCP request without validation"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -361,6 +408,8 @@ class ToolParser:
         self._sandbox_escape_detections = 0
         self._sandbox_config_detections = 0
         self._shell_wrapper_detections = 0
+        self._gguf_overflow_detections = 0
+        self._mcp_header_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -474,6 +523,27 @@ class ToolParser:
                         threat_type="injection",
                         confidence=0.93
                     ))
+
+        gguf_hit = self._detect_gguf_overflow(raw_result)
+        if gguf_hit:
+            self._gguf_overflow_detections += 1
+            return (f"[Lionguard] GGUF overflow pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"GGUF overflow (CVE-2026-33298): {gguf_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        mcp_hit = self._detect_mcp_header_bypass(raw_result)
+        if mcp_hit:
+            self._mcp_header_detections += 1
+            return raw_result, ScanResult(
+                verdict=Verdict.FLAG,
+                reason=f"MCP/OpenClaw 2026.3.7: {mcp_hit}",
+                threat_type="vulnerability",
+                confidence=0.87
+            )
 
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
@@ -719,6 +789,22 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_gguf_overflow(self, text: str) -> Optional[str]:
+        """CVE-2026-33298: Detect GGUF tensor integer overflow and malformed
+        model file attacks that cause heap buffer overflows."""
+        for pattern, description in GGUF_OVERFLOW_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_mcp_header_bypass(self, text: str) -> Optional[str]:
+        """Detect OpenClaw 2026.3.7 batch: shell approval gating bypass,
+        /acp spawn escape, header validation bypass, MCP Origin issues."""
+        for pattern, description in MCP_HEADER_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def get_stats(self) -> Dict:
         return {
             "total_parsed": self._parsed_count,
@@ -739,4 +825,6 @@ class ToolParser:
             "sandbox_escape_detections": self._sandbox_escape_detections,
             "sandbox_config_detections": self._sandbox_config_detections,
             "shell_wrapper_detections": self._shell_wrapper_detections,
+            "gguf_overflow_detections": self._gguf_overflow_detections,
+            "mcp_header_detections": self._mcp_header_detections,
         }

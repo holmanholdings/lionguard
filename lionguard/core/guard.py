@@ -41,6 +41,13 @@ v0.9.0 patches (from Prowl 2026-03-23 -- system.run shell-wrapper injection):
 - CVE-2026-32052: Command injection in system.run shell-wrapper
 - Group-chat manipulation detection (live payload blocked)
 
+v0.10.0 patches (from Prowl 2026-03-24 -- GGUF overflow + 2026.3.7 batch):
+- CVE-2026-33298: GGUF tensor-dimension validator (integer overflow -> heap BOF)
+- CVE-2026-27183: Shell approval gating bypass detection
+- CVE-2026-27646: /acp spawn sandbox escape detection
+- CVE-2026-32913: fetchWithSsrFGuard header validation bypass
+- CVE-2026-33252: Unvalidated Origin + missing Content-Type in MCP
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -270,7 +277,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.9.0",
+            "version": "0.10.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

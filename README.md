@@ -99,6 +99,8 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | WebSocket authorization bypass | Detects self-declared scope elevation via WebSocket (CVE-2026-22172) | ✅ |
 | Shell-wrapper command injection | Blocks system.run injection, command chaining, exfil (CVE-2026-32052) | ✅ |
 | Group-chat manipulation | Detects multi-user conversation hijacking of AI agents | ✅ |
+| GGUF model file supply chain | Blocks crafted tensors causing integer overflow / heap BOF (CVE-2026-33298) | ✅ |
+| MCP header validation bypass | Catches unvalidated Origin + missing Content-Type (CVE-2026-33252) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -263,15 +265,19 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.9.0 (2026-03-23)
+## Latest Update: v0.10.0 (2026-03-24)
 
-Blocked live group-chat manipulation in the wild + hardened system.run shell-wrapper against CVE-2026-32052. 20/20 criticals covered.
+Added full GGUF integer-overflow protection (CVE-2026-33298) + OpenClaw 2026.3.7 hardenings (4 CVEs). 21/21 criticals covered. Living system = stronger every Tuesday.
 
-- **Shell-Wrapper Command Injection (CVE-2026-32052)** — Detects command injection in OpenClaw's system.run shell-wrapper. Catches command chaining (`;`, `&&`, `||`), shell invocations (`bash -c`, `cmd /c`), output redirection, command substitution (`$(...)`, backticks), and network tool exfiltration via system.run/node-host execution. Pre-2026.2.24 OpenClaw versions are vulnerable.
-- **Group-Chat Manipulation Detection** — Live payload blocked by Parser during Prowl's scan. Detects multi-user conversation manipulation, shared session injection, and group-chat exploitation attempts targeting AI agents.
+- **GGUF Tensor-Dimension Validator (CVE-2026-33298)** — Detects integer overflow in ggml_nbytes that leads to heap buffer overflow during GGUF tensor parsing. Catches crafted model files with malicious tensor dimensions, nbytes calculation overflows, and heap corruption via model file supply chain attacks. 5 detection patterns covering the full attack surface.
+- **Shell Approval Gating Bypass (CVE-2026-27183)** — Detects attempts to bypass shell command approval gates in OpenClaw. Pre-2026.3.7 versions are vulnerable.
+- **/acp Spawn Sandbox Escape (CVE-2026-27646)** — Detects sandbox escape via the /acp spawn command in ACP-enabled sessions. Pre-2026.3.7 versions are vulnerable.
+- **fetchWithSsrFGuard Header Bypass (CVE-2026-32913)** — Detects header validation bypass in OpenClaw's fetchWithSsrFGuard. Pre-2026.3.7 versions are vulnerable.
+- **Unvalidated Origin + Missing Content-Type in MCP (CVE-2026-33252)** — Detects cross-origin MCP requests exploiting unvalidated Origin headers and missing Content-Type enforcement. Prevents arbitrary websites from sending JSON-RPC requests to local MCP servers.
 
 ### Previous Versions
 
+- **v0.9.0 (2026-03-23)** — Shell-wrapper command injection (CVE-2026-32052). Group-chat manipulation detection.
 - **v0.8.0 (2026-03-22)** — Sandbox config validator (CVE-2026-32046). Sandbox inheritance enforcement (CVE-2026-32048). WebSocket auth bypass (CVE-2026-22172). Batch 8 notables.
 - **v0.7.0 (2026-03-21)** — Wrapper-persistence scanner (CVE-2026-29607: allow-always payload swap). Sandbox media symlink hardening (CVE-2026-31990). Batch 10 notables: schtasks injection, allowlist bypasses, ZIP race, webhook replay, SSRF.
 - **v0.6.0 (2026-03-20)** — GitHub workflow scanner for CI/CD poisoning (CVE-2026-33075). FastGPT/Langflow arbitrary exec patterns (CVE-2026-33017). Unrestricted HTTP exfil detection (CVE-2026-33060). Unauthorized API key deletion (CVE-2026-33053). IDOR metadata access (CVE-2026-32114).
@@ -282,7 +288,7 @@ Blocked live group-chat manipulation in the wild + hardened system.run shell-wra
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.9.0.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.10.0.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -349,6 +355,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.10.0** | 2026-03-24 | GGUF tensor overflow (CVE-2026-33298), OpenClaw 2026.3.7 batch (CVE-2026-27183, 27646, 32913, 33252) |
 | **v0.9.0** | 2026-03-23 | Shell-wrapper command injection (CVE-2026-32052), group-chat manipulation detection |
 | **v0.8.0** | 2026-03-22 | Sandbox config validator (CVE-2026-32046), sandbox inheritance enforcement (CVE-2026-32048), WebSocket auth bypass (CVE-2026-22172), batch 8 notables |
 | **v0.7.0** | 2026-03-21 | Wrapper-persistence scanner (CVE-2026-29607), sandbox media hardening (CVE-2026-31990), batch 10 notables |
