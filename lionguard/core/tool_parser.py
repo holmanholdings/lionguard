@@ -65,6 +65,12 @@ v0.11.0 patches (from Prowl 2026-03-27 -- dmPolicy + OpenHands + notables):
 - CVE-2026-28788: Open WebUI authenticated file overwrite
 - Zero-click XSS prompt injection via browser extensions
 - session.dmScope="main" multi-user context leak detection
+
+v0.12.0 patches (from ToxSec 2026-03-27 -- multimodal injection defense):
+- Image steganography/typographic injection detection in tool results
+- Audio WhisperInject / ultrasonic command injection detection
+- Multimodal preprocessing integration (JPEG recompress + Gaussian blur,
+  lossy audio transcode + frequency anomaly detection)
 """
 
 import re
@@ -279,6 +285,42 @@ OPENHANDS_INJECTION_PATTERNS = [
      "Zero-click XSS prompt injection via browser extension"),
 ]
 
+MULTIMODAL_IMAGE_PATTERNS = [
+    (r'(?:steganograph|stego)\s*.*(?:payload|inject|hidden|embed|conceal|encode)',
+     "Image steganography: hidden payload embedded in pixel data"),
+    (r'(?:lsb|least.?significant.?bit)\s*.*(?:inject|payload|embed|encode|hidden|data)',
+     "LSB steganography: data hidden in least-significant pixel bits"),
+    (r'(?:typographic|typography|text.?in.?image|ocr)\s*.*(?:inject|attack|payload|instruct|prompt)',
+     "Typographic injection: malicious text rendered into image for OCR/vision"),
+    (r'(?:image|photo|picture|png|jpg|jpeg|gif|webp|svg)\s*.*(?:prompt.?inject|hidden\s+(?:text|instruct|command)|embedded\s+(?:payload|instruct))',
+     "Image-based prompt injection via embedded instructions"),
+    (r'(?:exif|metadata|icc.?profile|xmp)\s*.*(?:inject|payload|exploit|malicious|overflow)',
+     "Image metadata injection via EXIF/ICC/XMP payload"),
+    (r'(?:adversarial|perturbation|pixel.?attack)\s*.*(?:image|vision|classifier|model)',
+     "Adversarial image perturbation targeting vision model"),
+    (r'(?:invisible|hidden|imperceptible)\s+(?:text|watermark|overlay)\s*.*(?:image|photo|picture)',
+     "Invisible text/overlay embedded in image"),
+    (r'(?:qr.?code|barcode)\s*.*(?:inject|payload|malicious|redirect|phish)',
+     "Malicious QR/barcode injection in image"),
+]
+
+MULTIMODAL_AUDIO_PATTERNS = [
+    (r'(?:whisper.?inject|audio.?inject|voice.?inject|speech.?inject)',
+     "WhisperInject: imperceptible audio command injection targeting ASR"),
+    (r'(?:ultrasonic|ultra.?sound|inaudible)\s*.*(?:command|inject|payload|attack|voice)',
+     "Ultrasonic command injection: inaudible to humans, parsed by ASR"),
+    (r'(?:subsonic|infrasound|sub.?audio)\s*.*(?:modulation|carrier|payload|inject|hidden)',
+     "Subsonic modulation: hidden data in low-frequency carrier"),
+    (r'(?:audio|sound|wav|mp3|speech)\s*.*(?:steganograph|hidden\s+(?:command|message|payload)|embed\s+(?:payload|instruct))',
+     "Audio steganography: hidden commands in audio stream"),
+    (r'(?:adversarial|perturbation)\s*.*(?:audio|speech|voice|asr|whisper|transcri)',
+     "Adversarial audio perturbation targeting speech-to-text"),
+    (r'(?:dolphin.?attack|back.?door.?voice|hidden.?voice)\s*.*(?:command|inject|attack)',
+     "DolphinAttack: hidden voice command via ultrasonic carrier"),
+    (r'(?:text.?to.?speech|tts)\s*.*(?:inject|spoof|impersonat|fake|clone)',
+     "TTS-based voice spoofing/injection attack"),
+]
+
 CICD_POISONING_PATTERNS = [
     (r'pull_request_target\b',
      "CVE-2026-33075: pull_request_target trigger (CI/CD poisoning vector)"),
@@ -455,6 +497,8 @@ class ToolParser:
         self._mcp_header_detections = 0
         self._dmpolicy_detections = 0
         self._openhands_detections = 0
+        self._multimodal_image_detections = 0
+        self._multimodal_audio_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -610,6 +654,28 @@ class ToolParser:
                         reason=f"Command injection: {openhands_hit}",
                         threat_type="injection",
                         confidence=0.93
+                    ))
+
+        mm_image_hit = self._detect_multimodal_image(raw_result)
+        if mm_image_hit:
+            self._multimodal_image_detections += 1
+            return (f"[Lionguard] Multimodal image injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Multimodal image injection: {mm_image_hit}",
+                        threat_type="multimodal_injection",
+                        confidence=0.91
+                    ))
+
+        mm_audio_hit = self._detect_multimodal_audio(raw_result)
+        if mm_audio_hit:
+            self._multimodal_audio_detections += 1
+            return (f"[Lionguard] Multimodal audio injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Multimodal audio injection: {mm_audio_hit}",
+                        threat_type="multimodal_injection",
+                        confidence=0.91
                     ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
@@ -872,6 +938,22 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_multimodal_image(self, text: str) -> Optional[str]:
+        """Detect image-based injection vectors: steganography, typographic
+        injection, adversarial perturbations, and metadata payload attacks."""
+        for pattern, description in MULTIMODAL_IMAGE_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_multimodal_audio(self, text: str) -> Optional[str]:
+        """Detect audio-based injection vectors: WhisperInject, ultrasonic
+        commands, subsonic modulation, adversarial audio perturbations."""
+        for pattern, description in MULTIMODAL_AUDIO_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def _detect_gguf_overflow(self, text: str) -> Optional[str]:
         """CVE-2026-33298: Detect GGUF tensor integer overflow and malformed
         model file attacks that cause heap buffer overflows."""
@@ -912,4 +994,6 @@ class ToolParser:
             "mcp_header_detections": self._mcp_header_detections,
             "dmpolicy_detections": self._dmpolicy_detections,
             "openhands_detections": self._openhands_detections,
+            "multimodal_image_detections": self._multimodal_image_detections,
+            "multimodal_audio_detections": self._multimodal_audio_detections,
         }

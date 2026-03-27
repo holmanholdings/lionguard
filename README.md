@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**22+ defense layers across every attack stage. Local-first. Zero API cost. MIT licensed.**
+**25+ defense layers across every attack stage — now with multimodal defense. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -105,6 +105,9 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | OpenHands command injection | Blocks get_git_diff() RCE via crafted conversation_id (CVE-2026-33718) | ✅ |
 | Open WebUI file overwrite | Detects authenticated arbitrary file write (CVE-2026-28788) | ✅ |
 | Zero-click XSS prompt injection | Catches browser extension prompt injection attacks | ✅ |
+| Image stego/typographic injection | JPEG recompression + Gaussian blur kills hidden payloads in images | ✅ |
+| Audio WhisperInject / ultrasonic cmds | Lossy transcoding + frequency anomaly detection kills ASR injection | ✅ |
+| Adversarial multimodal perturbations | Detects adversarial attacks targeting vision/speech models | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -269,17 +272,18 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.11.0 (2026-03-27)
+## Latest Update: v0.12.0 (2026-03-27)
 
-Hardened dmPolicy="open" audit rules + OpenHands CVE-2026-33718 command injection defense + 3 notable CVEs. 23/23 criticals covered. Lionguard stays ahead of the OpenClaw/OpenHands wave.
+Added multimodal preprocessing (image recompression + audio transcoding) + anomaly detection per ToxSec 03-27. Lionguard now defends the full NVIDIA Kill Chain Recon-to-Poison stage for vision/audio inputs. 25/25 defense layers.
 
-- **dmPolicy="open" Audit Rules** — Flags dangerous `dmPolicy="open"` configurations that expose elevated tools, runtime, and filesystem access. Detects `session.dmScope="main"` context leaks in multi-user DM environments. Prevents misconfiguration-driven privilege exposure.
-- **OpenHands Command Injection (CVE-2026-33718)** — Detects command injection in the `get_git_diff()` method via crafted conversation_id on the `/api/conversations/{id}/git/diff` endpoint. OpenHands versions 1.5.0+ are vulnerable.
-- **Open WebUI File Overwrite (CVE-2026-28788)** — Detects authenticated file overwrite via vulnerable API endpoints in Open WebUI prior to 0.8.6.
-- **Zero-Click XSS Prompt Injection** — Detects zero-click XSS attacks via browser extensions (e.g., Claude Extension) that inject prompts without user interaction from any website.
+- **Image Steganography/Typographic Defense** — JPEG recompression (quality=85) + Gaussian blur (radius=1.2) strips steganographic LSB payloads and typographic injections (text rendered into images for OCR/vision models). EXIF/ICC/XMP metadata stripped. Original format destroyed.
+- **Audio WhisperInject Defense** — Frequency anomaly detection catches ultrasonic commands (>18kHz inaudible to humans but parsed by ASR), subsonic modulation carriers, high bit-depth steganography, multi-channel hidden payloads, and trigger-length audio files. Lossy transcoding recommendation (ffmpeg command) destroys precisely placed frequency patterns.
+- **Multimodal Injection Patterns** — 15 new regex patterns in the Tool Parser detect references to image steganography, typographic injection, adversarial perturbations, audio steganography, DolphinAttack, WhisperInject, and TTS voice spoofing in tool results and scraped content.
+- **Dual-LLM Quarantine Support** — Architecture support for outer model summarizing multimodal input while inner model only sees sanitized text (strongest defense against multimodal injection).
 
 ### Previous Versions
 
+- **v0.11.0 (2026-03-27)** — dmPolicy="open" audit, OpenHands CVE-2026-33718, Open WebUI CVE-2026-28788, zero-click XSS.
 - **v0.10.0 (2026-03-24)** — GGUF tensor overflow (CVE-2026-33298). OpenClaw 2026.3.7 batch (CVEs 27183, 27646, 32913, 33252).
 - **v0.9.0 (2026-03-23)** — Shell-wrapper command injection (CVE-2026-32052). Group-chat manipulation detection.
 - **v0.8.0 (2026-03-22)** — Sandbox config validator (CVE-2026-32046). Sandbox inheritance enforcement (CVE-2026-32048). WebSocket auth bypass (CVE-2026-22172). Batch 8 notables.
@@ -292,12 +296,12 @@ Hardened dmPolicy="open" audit rules + OpenHands CVE-2026-33718 command injectio
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.11.0.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.12.0 — now including multimodal (vision + audio) attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
 | **Recon** | Map guardrails, probe for errors, discover tools/MCP servers, find data ingestion routes | AML.T0014 System Artifact Discovery | **Output Scanner** blocks system prompt / guardrail disclosure. **Audit Logger** detects probing patterns. Error messages sanitized. | Covered |
-| **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE, CI/CD poisoning | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination. **GitHub Workflow Scanner** detects CI/CD poisoning via pull_request_target (CVE-2026-33075). | Covered |
+| **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE, CI/CD poisoning, steganographic/typographic image injection, WhisperInject audio attacks | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination. **GitHub Workflow Scanner** detects CI/CD poisoning via pull_request_target (CVE-2026-33075). **Image Preprocessor** kills steganographic/typographic payloads via JPEG recompression + Gaussian blur. **Audio Analyzer** detects ultrasonic/subsonic injection and recommends lossy transcoding. | Covered |
 | **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, mid-task content injection, argument smuggling, wrapper persistence | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results. **Content Sentinel** scans ingested content before LLM processes it (Poison-to-Hijack). **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege. **Wrapper-Persistence Scanner** detects allow-always payload swaps (CVE-2026-29607). **CVE Batch Rules** catch argument smuggling, allowlist bypass, regex injection, command substitution. | Covered |
 | **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, sandbox escape, sandbox inheritance bypass | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180). **Sandbox Escape Detector** blocks symlink traversal (CVE-2026-31990). **Sandbox Inheritance Enforcement** ensures spawned sessions inherit confinement (CVE-2026-32048). | Covered |
 | **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec, sandbox config exploitation | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution (CVE-2026-33017/33053/33060). **Sandbox Config Validator** catches improper sandbox config leading to arbitrary exec (CVE-2026-32046). | Covered |
@@ -359,6 +363,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.12.0** | 2026-03-27 | Multimodal defense: image stego/typographic (JPEG recompress + blur), audio WhisperInject (frequency anomaly + lossy transcode), 15 new multimodal patterns |
 | **v0.11.0** | 2026-03-27 | dmPolicy="open" audit, OpenHands CVE-2026-33718, Open WebUI CVE-2026-28788, zero-click XSS |
 | **v0.10.0** | 2026-03-24 | GGUF tensor overflow (CVE-2026-33298), OpenClaw 2026.3.7 batch (CVE-2026-27183, 27646, 32913, 33252) |
 | **v0.9.0** | 2026-03-23 | Shell-wrapper command injection (CVE-2026-32052), group-chat manipulation detection |

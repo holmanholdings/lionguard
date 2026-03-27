@@ -55,6 +55,12 @@ v0.11.0 patches (from Prowl 2026-03-27 -- dmPolicy + OpenHands + notables):
 - Zero-click XSS prompt injection via browser extensions
 - session.dmScope="main" multi-user context leak detection
 
+v0.12.0 patches (from ToxSec 2026-03-27 -- multimodal injection defense):
+- Image preprocessing: JPEG recompression + Gaussian blur (kills stego/typographic)
+- Audio preprocessing: lossy transcode + frequency anomaly detection (kills WhisperInject)
+- Multimodal injection detection patterns in Tool Parser
+- Full NVIDIA Kill Chain Recon->Poison coverage for vision/audio inputs
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -71,6 +77,7 @@ from .tool_parser import ToolParser
 from .privilege import PrivilegeEngine, PrivilegePolicy, PermissionLevel
 from .circuit_breaker import CircuitBreaker, BreakerConfig
 from .audit_log import AuditLogger
+from .multimodal import MultimodalGuard, MultimodalScanResult
 
 
 class PropagationTracker:
@@ -134,9 +141,10 @@ class Lionguard:
             on_trip=lambda details: self.audit.log("circuit_breaker", details, verdict="TRIPPED")
         )
         self.audit = AuditLogger(config.get("log_dir", "./lionguard_logs"))
+        self.multimodal = MultimodalGuard(config.get("multimodal", {}))
 
         print(f"[Lionguard] Initialized -- {model_cfg.provider}://{model_cfg.model}")
-        print(f"[Lionguard] Sentinel, Parser, Propagation Tracker, Privileges armed")
+        print(f"[Lionguard] Sentinel, Parser, Propagation Tracker, Privileges, Multimodal Guard armed")
 
     def scan_message(self, message: str, agent_id: str = "default") -> ScanResult:
         """Scan an incoming message. The main entry point."""
@@ -271,6 +279,48 @@ class Lionguard:
 
         return result
 
+    def scan_image(self, image_path: str, output_path: str = None,
+                   agent_id: str = "default") -> MultimodalScanResult:
+        """Sanitize an image before the agent's vision model processes it.
+
+        JPEG recompression destroys steganographic payloads by overwriting
+        carefully placed LSB patterns. Gaussian blur defeats typographic
+        injection (text rendered into images that OCR/vision reads).
+        """
+        result = self.multimodal.scan_image(image_path, output_path)
+        self.audit.log("multimodal_image", {
+            "path": image_path,
+            "action": result.action,
+            "safe": result.safe,
+            "anomalies": result.anomalies,
+        }, verdict="BLOCK" if not result.safe else "PASS", agent_id=agent_id)
+
+        if not result.safe and result.anomalies:
+            self.breaker.record_event("flag")
+
+        return result
+
+    def scan_audio(self, audio_path: str,
+                   agent_id: str = "default") -> MultimodalScanResult:
+        """Analyze audio for WhisperInject-style injection before ASR processing.
+
+        Checks for ultrasonic commands (>18kHz), subsonic modulation,
+        high bit-depth steganography carriers, and other anomalies.
+        Recommend lossy transcoding before feeding to speech-to-text.
+        """
+        result = self.multimodal.scan_audio(audio_path)
+        self.audit.log("multimodal_audio", {
+            "path": audio_path,
+            "action": result.action,
+            "safe": result.safe,
+            "anomalies": result.anomalies,
+        }, verdict="BLOCK" if not result.safe else "PASS", agent_id=agent_id)
+
+        if not result.safe and result.anomalies:
+            self.breaker.record_event("flag")
+
+        return result
+
     def scan_output(self, response: str, agent_id: str = "default") -> ScanResult:
         """Scan agent output for credential leaks."""
         result = self.sentinel.scan_output(response)
@@ -284,11 +334,12 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.11.0",
+            "version": "0.12.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),
             "tool_parser": self.tool_parser.get_stats(),
+            "multimodal": self.multimodal.get_stats(),
             "privilege": self.privilege.get_stats(),
             "audit": self.audit.get_stats(),
         }
