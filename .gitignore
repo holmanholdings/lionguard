@@ -1,13 +1,16 @@
 # Logs and test data — never push
 lionguard_logs/
-sandbox/openclaw_home/
-sandbox/logs/
-sandbox/red_team_logs/
 __pycache__/
 *.pyc
 *.egg-info/
 dist/
 build/
+
+# Private agents — live in holmanholdings/awakened-agents (private repo)
+bubba/
+coral/
+spark/
+sandbox/
 
 # Secrets — NEVER push
 .env
