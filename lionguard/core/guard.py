@@ -48,6 +48,13 @@ v0.10.0 patches (from Prowl 2026-03-24 -- GGUF overflow + 2026.3.7 batch):
 - CVE-2026-32913: fetchWithSsrFGuard header validation bypass
 - CVE-2026-33252: Unvalidated Origin + missing Content-Type in MCP
 
+v0.11.0 patches (from Prowl 2026-03-27 -- dmPolicy + OpenHands + notables):
+- dmPolicy="open" audit: flags dangerous tool/runtime/filesystem exposure
+- CVE-2026-33718: OpenHands command injection in get_git_diff()
+- CVE-2026-28788: Open WebUI authenticated file overwrite
+- Zero-click XSS prompt injection via browser extensions
+- session.dmScope="main" multi-user context leak detection
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -277,7 +284,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.10.0",
+            "version": "0.11.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

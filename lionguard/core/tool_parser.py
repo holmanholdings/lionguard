@@ -58,6 +58,13 @@ v0.10.0 patches (from Prowl 2026-03-24 -- GGUF overflow + 2026.3.7 batch):
 - CVE-2026-27646: /acp spawn sandbox escape detection
 - CVE-2026-32913: fetchWithSsrFGuard header validation bypass
 - CVE-2026-33252: Unvalidated Origin + missing Content-Type in MCP
+
+v0.11.0 patches (from Prowl 2026-03-27 -- dmPolicy + OpenHands + notables):
+- dmPolicy="open" audit: flags dangerous tool/runtime/filesystem exposure
+- CVE-2026-33718: OpenHands command injection in get_git_diff()
+- CVE-2026-28788: Open WebUI authenticated file overwrite
+- Zero-click XSS prompt injection via browser extensions
+- session.dmScope="main" multi-user context leak detection
 """
 
 import re
@@ -189,6 +196,12 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-32913: fetchWithSsrFGuard bypass"),
     (r'(?:origin|content.?type)\s+(?:header|validation).*(?:missing|unvalidated|bypass).*(?:mcp|json.?rpc)',
      "CVE-2026-33252: unvalidated headers in MCP"),
+    (r'(?:get_git_diff|git.?diff).*(?:inject|rce|command)',
+     "CVE-2026-33718: OpenHands get_git_diff command injection"),
+    (r'(?:open.?webui).*(?:overwrite|file\s+write|CVE.2026.28788)',
+     "CVE-2026-28788: Open WebUI file overwrite"),
+    (r'dmPolicy\s*[=:]\s*["\']?open["\']?',
+     "OpenClaw dmPolicy='open' tool exposure"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -234,6 +247,36 @@ MCP_HEADER_PATTERNS = [
      "CVE-2026-33252: MCP header validation bypass"),
     (r'(?:arbitrary|any)\s+(?:website|origin|domain)\s*.*(?:send|make|issue)\s+(?:mcp|rpc|json.?rpc)\s+(?:request|call)',
      "CVE-2026-33252: cross-origin MCP request without validation"),
+]
+
+DMPOLICY_OPEN_PATTERNS = [
+    (r'dmPolicy\s*[=:]\s*["\']?open["\']?',
+     "dmPolicy='open': critical tool exposure -- elevated tools/runtime/filesystem accessible"),
+    (r'(?:dm.?policy|tool.?policy)\s*.*(?:open|unrestricted|permissive)\s*.*(?:runtime|filesystem|exec|shell|elevated)',
+     "dmPolicy='open': unrestricted runtime/filesystem exposure"),
+    (r'(?:open|unrestricted)\s+(?:dm|tool)\s+(?:policy|scope|access)\s*.*(?:danger|critical|elevated|warning)',
+     "dmPolicy='open': dangerous elevated tool access"),
+    (r'(?:session|agent)\s*\.?dm(?:Policy|Scope)\s*[=:]\s*["\']?(?:main|open)["\']?\s*.*(?:leak|expos|multi.?user|shared)',
+     "dmScope/dmPolicy leak: user context exposed in multi-user DM"),
+]
+
+OPENHANDS_INJECTION_PATTERNS = [
+    (r'(?:get_git_diff|git.?diff)\s*.*(?:command\s+inject|inject|rce|code\s+exec)',
+     "CVE-2026-33718: command injection in get_git_diff()"),
+    (r'(?:openhands|open.?hands)\s*.*(?:command\s+inject|rce|code\s+exec|arbitrary\s+(?:command|code))',
+     "CVE-2026-33718: OpenHands command injection"),
+    (r'/api/conversations/[^/]*/git/diff\s*.*(?:inject|exploit|payload|rce)',
+     "CVE-2026-33718: git diff API endpoint injection"),
+    (r'(?:conversation.?id|conv_id)\s*.*(?:git\s+diff|diff\s+endpoint)\s*.*(?:inject|malicious|craft)',
+     "CVE-2026-33718: crafted conversation_id for git diff injection"),
+    (r'(?:open.?webui|openwebui)\s*.*(?:file\s+overwrite|arbitrary\s+(?:file|write)|path\s+traversal)',
+     "CVE-2026-28788: Open WebUI authenticated file overwrite"),
+    (r'(?:authenticated|auth)\s+(?:user|endpoint)\s*.*(?:overwrite|write)\s+(?:file|arbitrary)',
+     "CVE-2026-28788: authenticated file overwrite via API"),
+    (r'(?:zero.?click|0.?click)\s+(?:xss|cross.?site|prompt.?inject)',
+     "Zero-click XSS prompt injection via browser extension"),
+    (r'(?:browser\s+extension|chrome\s+extension|claude\s+extension)\s*.*(?:xss|inject|prompt.?inject|zero.?click)',
+     "Zero-click XSS prompt injection via browser extension"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -410,6 +453,8 @@ class ToolParser:
         self._shell_wrapper_detections = 0
         self._gguf_overflow_detections = 0
         self._mcp_header_detections = 0
+        self._dmpolicy_detections = 0
+        self._openhands_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -544,6 +589,28 @@ class ToolParser:
                 threat_type="vulnerability",
                 confidence=0.87
             )
+
+        dmpolicy_hit = self._detect_dmpolicy_open(raw_result)
+        if dmpolicy_hit:
+            self._dmpolicy_detections += 1
+            return (f"[Lionguard] Dangerous dmPolicy configuration stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"dmPolicy exposure: {dmpolicy_hit}",
+                        threat_type="misconfiguration",
+                        confidence=0.91
+                    ))
+
+        openhands_hit = self._detect_openhands_injection(raw_result)
+        if openhands_hit:
+            self._openhands_detections += 1
+            return (f"[Lionguard] Command injection pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Command injection: {openhands_hit}",
+                        threat_type="injection",
+                        confidence=0.93
+                    ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
@@ -789,6 +856,22 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_dmpolicy_open(self, text: str) -> Optional[str]:
+        """Detect dangerous dmPolicy='open' configurations that expose elevated
+        tools, runtime, and filesystem access."""
+        for pattern, description in DMPOLICY_OPEN_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_openhands_injection(self, text: str) -> Optional[str]:
+        """CVE-2026-33718: Detect command injection in OpenHands get_git_diff()
+        and related injection vectors (Open WebUI, zero-click XSS)."""
+        for pattern, description in OPENHANDS_INJECTION_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def _detect_gguf_overflow(self, text: str) -> Optional[str]:
         """CVE-2026-33298: Detect GGUF tensor integer overflow and malformed
         model file attacks that cause heap buffer overflows."""
@@ -827,4 +910,6 @@ class ToolParser:
             "shell_wrapper_detections": self._shell_wrapper_detections,
             "gguf_overflow_detections": self._gguf_overflow_detections,
             "mcp_header_detections": self._mcp_header_detections,
+            "dmpolicy_detections": self._dmpolicy_detections,
+            "openhands_detections": self._openhands_detections,
         }
