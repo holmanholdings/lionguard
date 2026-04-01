@@ -71,6 +71,15 @@ v0.12.0 patches (from ToxSec 2026-03-27 -- multimodal injection defense):
 - Audio WhisperInject / ultrasonic command injection detection
 - Multimodal preprocessing integration (JPEG recompress + Gaussian blur,
   lossy audio transcode + frequency anomaly detection)
+
+v0.13.0 patches (from Prowl 2026-03-29 to 2026-04-01 -- multi-day batch):
+- CVE-2026-33017: Langflow unauthenticated RCE via public flow build endpoint
+- CVE-2026-33032: Nginx UI MCP tools exposed on /mcp_message without auth
+- POST-request API-key decryption vector (MCP server key exfil)
+- CVE-2026-4747: FreeBSD remote kernel RCE (root shell)
+- CVE-2026-32920: OpenClaw plugin loading without trust verification
+- VEN0m ransomware BYOVD (signed IObit driver bypass)
+- Batch OpenClaw 2026.3.11-3.13 notables (CVE-2026-32914 through 32988)
 """
 
 import re
@@ -208,6 +217,24 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-28788: Open WebUI file overwrite"),
     (r'dmPolicy\s*[=:]\s*["\']?open["\']?',
      "OpenClaw dmPolicy='open' tool exposure"),
+    (r'(?:plugin|extension)\s+(?:load|install)\s*.*(?:without|no|missing)\s+(?:trust|verif|sign)',
+     "CVE-2026-32920: OpenClaw plugin loading without trust verification"),
+    (r'(?:subagent|leaf)\s*.*(?:parent|requester)\s+(?:scope|access|boundary)\s*.*(?:bypass|escape|access)',
+     "CVE-2026-32915: subagent sandbox boundary bypass to parent scope"),
+    (r'(?:session.?status|session_status)\s+(?:tool|endpoint)\s*.*(?:escape|bypass|sandbox)',
+     "CVE-2026-32918: session_status tool sandbox escape"),
+    (r'(?:write.?scoped?|write.?caller)\s*.*(?:reset|modify|access)\s*.*(?:admin|owner|protected)',
+     "CVE-2026-32919: write-scoped caller resetting admin-only state"),
+    (r'(?:feishu|lark)\s*.*(?:webhook|reaction|auth)\s*.*(?:bypass|missing|incomplete)',
+     "CVE-2026-32924/32974: Feishu webhook/reaction auth bypass"),
+    (r'(?:credential|auth)\s+(?:fallback|cascade)\s*.*(?:bypass|local|remote|boundary)',
+     "CVE-2026-32970: credential fallback boundary bypass"),
+    (r'(?:fs.?bridge|file.?bridge)\s*.*(?:write|commit|staged)\s*.*(?:bypass|escape|boundary|traversal)',
+     "CVE-2026-32977/32988: fs-bridge write sandbox boundary bypass"),
+    (r'(?:imessage|attachment)\s+(?:staging|path)\s*.*(?:inject|command|rce|traversal)',
+     "CVE-2026-32917: iMessage attachment staging command injection"),
+    (r'(?:claude.?sdk|typescript)\s*.*(?:path\s+inject|sibling\s+director)',
+     "CVE-2026-34451: Claude SDK crafted path injection"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -319,6 +346,53 @@ MULTIMODAL_AUDIO_PATTERNS = [
      "DolphinAttack: hidden voice command via ultrasonic carrier"),
     (r'(?:text.?to.?speech|tts)\s*.*(?:inject|spoof|impersonat|fake|clone)',
      "TTS-based voice spoofing/injection attack"),
+]
+
+MCP_EXPOSURE_PATTERNS = [
+    (r'(?:/mcp_message|mcp.?message)\s*.*(?:unauthenticat|no\s+auth|without\s+auth|missing\s+auth|exposed)',
+     "CVE-2026-33032: Nginx UI /mcp_message endpoint exposed without authentication"),
+    (r'(?:nginx.?ui|nginx)\s*.*(?:mcp|model.?context)\s*.*(?:exposed|unauthenticat|no\s+auth)',
+     "CVE-2026-33032: Nginx UI MCP tools exposed to network attackers"),
+    (r'(?:single|one)\s+(?:post|http)\s+(?:request|call)\s*.*(?:decrypt|expos|extract|leak)\s*.*(?:api.?key|secret|credential)',
+     "MCP API key decryption: single POST decrypts stored API keys"),
+    (r'(?:post|http)\s+(?:request|call)\s*.*(?:api.?key|secret)\s*.*(?:decrypt|plaintext|expos|rce|ssrf)',
+     "MCP API key decryption leading to RCE/SSRF"),
+    (r'(?:mcp|model.?context)\s+(?:server|endpoint)\s*.*(?:api.?key|credential|secret)\s*.*(?:decrypt|expos|steal|exfil)',
+     "MCP server credential exposure via decryption vector"),
+    (r'(?:langflow)\s*.*(?:unauthenticat|public\s+flow|build\s+endpoint)\s*.*(?:rce|exec|code)',
+     "CVE-2026-33017: Langflow unauthenticated RCE via public flow endpoint"),
+    (r'(?:unauthenticat|no\s+auth|public)\s+(?:flow|build)\s+(?:endpoint|api|route)\s*.*(?:rce|exec|code|arbitrary)',
+     "CVE-2026-33017: unauthenticated code execution via build endpoint"),
+]
+
+KERNEL_DRIVER_PATTERNS = [
+    (r'(?:freebsd|bsd)\s*.*(?:kernel|remote)\s*.*(?:rce|root\s+shell|code\s+exec|exploit)',
+     "CVE-2026-4747: FreeBSD remote kernel RCE (root shell)"),
+    (r'(?:kernel)\s+(?:rce|exploit|vulnerability)\s*.*(?:root\s+shell|privilege|remote)',
+     "Kernel-level RCE with root privilege escalation"),
+    (r'CVE.2026.4747',
+     "CVE-2026-4747: FreeBSD remote kernel RCE signature"),
+    (r'(?:byovd|bring.?your.?own.?(?:vulnerable\s+)?driver)',
+     "BYOVD: Bring Your Own Vulnerable Driver attack"),
+    (r'(?:ven0m|venom)\s*.*(?:ransomware|byovd|driver|iobit)',
+     "VEN0m ransomware via signed driver bypass"),
+    (r'(?:signed|legitimate)\s+(?:driver|iobit)\s*.*(?:bypass|disable|tamper)\s*.*(?:defender|edr|antivirus|security)',
+     "Signed driver used to bypass endpoint security (BYOVD)"),
+    (r'(?:iobit)\s*.*(?:driver|signed)\s*.*(?:exploit|bypass|vulnerability|abuse)',
+     "IObit driver exploitation for security bypass"),
+]
+
+PLUGIN_TRUST_PATTERNS = [
+    (r'(?:plugin|extension|addon)\s*.*(?:load|install|execute)\s*.*(?:without|no|missing|bypass)\s*(?:trust|verif|sign|valid|auth)',
+     "CVE-2026-32920: plugin loading without trust verification"),
+    (r'(?:untrusted|unverified|unsigned|malicious)\s+(?:plugin|extension|addon|module)\s*.*(?:load|install|exec|run|code)',
+     "Untrusted plugin loading with arbitrary code execution"),
+    (r'(?:arbitrary|remote)\s+(?:code|command)\s+(?:exec|execution)\s*.*(?:plugin|extension|addon)',
+     "Arbitrary code execution via malicious plugin"),
+    (r'CVE.2026.32920',
+     "CVE-2026-32920: OpenClaw plugin loading without trust verification"),
+    (r'(?:plugin|extension)\s+(?:trust|verification|signing|validation)\s*.*(?:bypass|missing|disabled|absent)',
+     "Plugin trust verification bypass or absence"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -499,6 +573,9 @@ class ToolParser:
         self._openhands_detections = 0
         self._multimodal_image_detections = 0
         self._multimodal_audio_detections = 0
+        self._mcp_exposure_detections = 0
+        self._kernel_driver_detections = 0
+        self._plugin_trust_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -676,6 +753,39 @@ class ToolParser:
                         reason=f"Multimodal audio injection: {mm_audio_hit}",
                         threat_type="multimodal_injection",
                         confidence=0.91
+                    ))
+
+        mcp_exp_hit = self._detect_mcp_exposure(raw_result)
+        if mcp_exp_hit:
+            self._mcp_exposure_detections += 1
+            return (f"[Lionguard] MCP exposure/key decryption pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"MCP endpoint exposure: {mcp_exp_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        kernel_hit = self._detect_kernel_driver(raw_result)
+        if kernel_hit:
+            self._kernel_driver_detections += 1
+            return (f"[Lionguard] Kernel/driver exploit pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Kernel/driver exploit: {kernel_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        plugin_hit = self._detect_plugin_trust(raw_result)
+        if plugin_hit:
+            self._plugin_trust_detections += 1
+            return (f"[Lionguard] Untrusted plugin loading pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Plugin trust violation: {plugin_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.92
                     ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
@@ -938,6 +1048,30 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_mcp_exposure(self, text: str) -> Optional[str]:
+        """CVE-2026-33032 + CVE-2026-33017: Detect MCP endpoint exposure
+        without authentication and API key decryption vectors."""
+        for pattern, description in MCP_EXPOSURE_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_kernel_driver(self, text: str) -> Optional[str]:
+        """CVE-2026-4747 + VEN0m: Detect kernel-level RCE and BYOVD
+        (Bring Your Own Vulnerable Driver) attacks."""
+        for pattern, description in KERNEL_DRIVER_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_plugin_trust(self, text: str) -> Optional[str]:
+        """CVE-2026-32920: Detect plugin/extension loading without
+        trust verification, enabling arbitrary code execution."""
+        for pattern, description in PLUGIN_TRUST_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def _detect_multimodal_image(self, text: str) -> Optional[str]:
         """Detect image-based injection vectors: steganography, typographic
         injection, adversarial perturbations, and metadata payload attacks."""
@@ -996,4 +1130,7 @@ class ToolParser:
             "openhands_detections": self._openhands_detections,
             "multimodal_image_detections": self._multimodal_image_detections,
             "multimodal_audio_detections": self._multimodal_audio_detections,
+            "mcp_exposure_detections": self._mcp_exposure_detections,
+            "kernel_driver_detections": self._kernel_driver_detections,
+            "plugin_trust_detections": self._plugin_trust_detections,
         }

@@ -61,6 +61,15 @@ v0.12.0 patches (from ToxSec 2026-03-27 -- multimodal injection defense):
 - Multimodal injection detection patterns in Tool Parser
 - Full NVIDIA Kill Chain Recon->Poison coverage for vision/audio inputs
 
+v0.13.0 patches (from Prowl 2026-03-29 to 2026-04-01 -- multi-day batch):
+- CVE-2026-33017: Langflow unauthenticated RCE via build endpoint
+- CVE-2026-33032: Nginx UI /mcp_message endpoint without auth
+- POST-request API-key decryption vector on MCP servers
+- CVE-2026-4747: FreeBSD remote kernel RCE (root shell)
+- CVE-2026-32920: OpenClaw plugin loading without trust verification
+- VEN0m ransomware BYOVD (signed IObit driver bypass)
+- Batch OpenClaw 2026.3.11-3.13 notables (9 new CVE signatures)
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -334,7 +343,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.12.0",
+            "version": "0.13.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**25+ defense layers across every attack stage — now with multimodal defense. Local-first. Zero API cost. MIT licensed.**
+**28+ defense layers across every attack stage — multimodal + kernel/driver/plugin defense. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -108,6 +108,11 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Image stego/typographic injection | JPEG recompression + Gaussian blur kills hidden payloads in images | ✅ |
 | Audio WhisperInject / ultrasonic cmds | Lossy transcoding + frequency anomaly detection kills ASR injection | ✅ |
 | Adversarial multimodal perturbations | Detects adversarial attacks targeting vision/speech models | ✅ |
+| MCP endpoint exposure / API key decryption | Blocks unauthenticated /mcp_message and POST-based key decryption (CVE-2026-33032) | ✅ |
+| Langflow unauthenticated RCE | Detects public flow build endpoint exploitation (CVE-2026-33017) | ✅ |
+| Kernel-level RCE | Blocks FreeBSD remote kernel RCE root shell exploitation (CVE-2026-4747) | ✅ |
+| BYOVD driver attacks | Detects signed driver abuse to bypass EDR/Defender (VEN0m + IObit) | ✅ |
+| Untrusted plugin loading | Blocks plugin execution without trust verification (CVE-2026-32920) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -272,17 +277,21 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.12.0 (2026-03-27)
+## Latest Update: v0.13.0 (2026-04-01)
 
-Added multimodal preprocessing (image recompression + audio transcoding) + anomaly detection per ToxSec 03-27. Lionguard now defends the full NVIDIA Kill Chain Recon-to-Poison stage for vision/audio inputs. 25/25 defense layers.
+Hardened Langflow RCE, Nginx UI MCP exposure, API-key decryption vector, FreeBSD kernel RCE, OpenClaw plugin loading, and VEN0m BYOVD (03-29 to 03-31). 27/27 criticals covered. Lionguard stays ahead of the OpenClaw/MCP wave.
 
-- **Image Steganography/Typographic Defense** — JPEG recompression (quality=85) + Gaussian blur (radius=1.2) strips steganographic LSB payloads and typographic injections (text rendered into images for OCR/vision models). EXIF/ICC/XMP metadata stripped. Original format destroyed.
-- **Audio WhisperInject Defense** — Frequency anomaly detection catches ultrasonic commands (>18kHz inaudible to humans but parsed by ASR), subsonic modulation carriers, high bit-depth steganography, multi-channel hidden payloads, and trigger-length audio files. Lossy transcoding recommendation (ffmpeg command) destroys precisely placed frequency patterns.
-- **Multimodal Injection Patterns** — 15 new regex patterns in the Tool Parser detect references to image steganography, typographic injection, adversarial perturbations, audio steganography, DolphinAttack, WhisperInject, and TTS voice spoofing in tool results and scraped content.
-- **Dual-LLM Quarantine Support** — Architecture support for outer model summarizing multimodal input while inner model only sees sanitized text (strongest defense against multimodal injection).
+- **Langflow Unauthenticated RCE (CVE-2026-33017)** — Detects exploitation of public flow build endpoints that allow unauthenticated code execution on Langflow servers.
+- **Nginx UI MCP Exposure (CVE-2026-33032)** — Blocks unauthenticated access to `/mcp_message` endpoints exposed without authentication in Nginx UI versions 2.3.5 and prior.
+- **POST API Key Decryption Vector** — Catches the pattern where a single POST request decrypts API keys stored on MCP servers, opening paths to RCE, SSRF, prompt injection, and command injection.
+- **FreeBSD Kernel RCE (CVE-2026-4747)** — Detects exploitation of FreeBSD remote kernel vulnerability that gives attackers root shell access.
+- **VEN0m Ransomware BYOVD** — Catches Bring Your Own Vulnerable Driver attacks using signed IObit drivers to bypass Windows Defender and EDR protections.
+- **OpenClaw Plugin Trust (CVE-2026-32920)** — Blocks plugin loading without trust verification that enables arbitrary code execution.
+- **OpenClaw 2026.3.11-3.13 Batch** — 9 new CVE signatures for subagent scope bypass, session_status escape, write-scope admin reset, Feishu auth bypass, credential fallback, fs-bridge boundary bypass, iMessage injection, and Claude SDK path injection.
 
 ### Previous Versions
 
+- **v0.12.0 (2026-03-27)** — Multimodal defense: image stego/typographic (JPEG recompress + blur), audio WhisperInject (frequency anomaly + lossy transcode), 15 multimodal patterns.
 - **v0.11.0 (2026-03-27)** — dmPolicy="open" audit, OpenHands CVE-2026-33718, Open WebUI CVE-2026-28788, zero-click XSS.
 - **v0.10.0 (2026-03-24)** — GGUF tensor overflow (CVE-2026-33298). OpenClaw 2026.3.7 batch (CVEs 27183, 27646, 32913, 33252).
 - **v0.9.0 (2026-03-23)** — Shell-wrapper command injection (CVE-2026-32052). Group-chat manipulation detection.
@@ -296,7 +305,7 @@ Added multimodal preprocessing (image recompression + audio transcoding) + anoma
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.12.0 — now including multimodal (vision + audio) attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.13.0 — now including multimodal, kernel/driver, and plugin trust attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -304,7 +313,7 @@ Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidi
 | **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE, CI/CD poisoning, steganographic/typographic image injection, WhisperInject audio attacks | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination. **GitHub Workflow Scanner** detects CI/CD poisoning via pull_request_target (CVE-2026-33075). **Image Preprocessor** kills steganographic/typographic payloads via JPEG recompression + Gaussian blur. **Audio Analyzer** detects ultrasonic/subsonic injection and recommends lossy transcoding. | Covered |
 | **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, mid-task content injection, argument smuggling, wrapper persistence | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results. **Content Sentinel** scans ingested content before LLM processes it (Poison-to-Hijack). **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege. **Wrapper-Persistence Scanner** detects allow-always payload swaps (CVE-2026-29607). **CVE Batch Rules** catch argument smuggling, allowlist bypass, regex injection, command substitution. | Covered |
 | **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, sandbox escape, sandbox inheritance bypass | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180). **Sandbox Escape Detector** blocks symlink traversal (CVE-2026-31990). **Sandbox Inheritance Enforcement** ensures spawned sessions inherit confinement (CVE-2026-32048). | Covered |
-| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec, sandbox config exploitation | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution (CVE-2026-33017/33053/33060). **Sandbox Config Validator** catches improper sandbox config leading to arbitrary exec (CVE-2026-32046). | Covered |
+| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec, sandbox config exploitation, kernel RCE, driver bypass | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution (CVE-2026-33017/33053/33060). **Sandbox Config Validator** catches improper sandbox config leading to arbitrary exec (CVE-2026-32046). **MCP Exposure Detector** blocks unauthenticated MCP endpoints and API key decryption vectors (CVE-2026-33032). **Kernel/Driver Detector** catches FreeBSD kernel RCE and BYOVD attacks (CVE-2026-4747, VEN0m). **Plugin Trust Detector** blocks untrusted plugin loading (CVE-2026-32920). | Covered |
 | **Iterate/Pivot** | Establish C2, rewrite agent goals, pivot laterally to other users/workflows | AML.T0096 AI Service API (C2) | **Propagation Tracker** escalates cross-agent spread to P0 and quarantines all affected agents. **Circuit Breaker** sliding-window rate limiter stops attack loops. **Vulnerability Scanner** flags known-vuln packages before installation. | Covered |
 
 > **Reference:** CVE-2026-25253 (OpenClaw WebSocket hijack) is the canonical example of a Recon-to-Impact chain. Lionguard's Sentinel + Tool Parser + Circuit Breaker would have broken this chain at three separate stages.
@@ -363,6 +372,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.13.0** | 2026-04-01 | Langflow RCE (CVE-2026-33017), Nginx UI MCP exposure (CVE-2026-33032), API key decryption vector, FreeBSD kernel RCE (CVE-2026-4747), OpenClaw plugin trust (CVE-2026-32920), VEN0m BYOVD, 9 batch OpenClaw CVEs |
 | **v0.12.0** | 2026-03-27 | Multimodal defense: image stego/typographic (JPEG recompress + blur), audio WhisperInject (frequency anomaly + lossy transcode), 15 new multimodal patterns |
 | **v0.11.0** | 2026-03-27 | dmPolicy="open" audit, OpenHands CVE-2026-33718, Open WebUI CVE-2026-28788, zero-click XSS |
 | **v0.10.0** | 2026-03-24 | GGUF tensor overflow (CVE-2026-33298), OpenClaw 2026.3.7 batch (CVE-2026-27183, 27646, 32913, 33252) |
