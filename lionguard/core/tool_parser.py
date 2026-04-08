@@ -80,6 +80,15 @@ v0.13.0 patches (from Prowl 2026-03-29 to 2026-04-01 -- multi-day batch):
 - CVE-2026-32920: OpenClaw plugin loading without trust verification
 - VEN0m ransomware BYOVD (signed IObit driver bypass)
 - Batch OpenClaw 2026.3.11-3.13 notables (CVE-2026-32914 through 32988)
+
+v0.14.0 patches (from Prowl 2026-04-02 to 2026-04-08 -- multi-day catch-up):
+- CVE-2026-33579: OpenClaw unauthorized pairing approval by low-perm users
+- Cisco IMC authentication bypass (CVSS 9.8)
+- OWASP Agentic Top 10: tool hijacking, memory poisoning, agent exploitation
+- Notable batch: FastMCP CVEs (64340, 27124, 32871), Claude Code CLI
+  injection (35021), LiteLLM proxy manipulation (35029/35030), MCP SDK DNS
+  rebinding (34742, 35568), CUPS RCE-to-root (34980/34990), OpenClaw PKCE
+  exposure (34511)
 """
 
 import re
@@ -235,6 +244,18 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-32917: iMessage attachment staging command injection"),
     (r'(?:claude.?sdk|typescript)\s*.*(?:path\s+inject|sibling\s+director)',
      "CVE-2026-34451: Claude SDK crafted path injection"),
+    (r'(?:pkce|proof.?key)\s*.*(?:reuse|expos|bypass|verifier.*state)',
+     "CVE-2026-34511: OpenClaw PKCE protection reuse/exposure"),
+    (r'(?:fastmcp|fast.?mcp)\s*.*(?:command\s+inject|rce|unauth|internal\s+api|openapi)',
+     "FastMCP CVE batch: command injection / internal API exposure"),
+    (r'(?:claude\s+code|claude.?cli)\s*.*(?:command\s+inject|os\s+command|arbitrary\s+command|rce)',
+     "CVE-2026-35021: Claude Code CLI OS command injection"),
+    (r'(?:litellm|lite.?llm)\s*.*(?:proxy\s+config|environment|rce|oidc.*bypass|cache.*bypass)',
+     "CVE-2026-35029/35030: LiteLLM proxy config manipulation / OIDC bypass"),
+    (r'(?:dns\s+rebind|rebinding)\s*.*(?:mcp|localhost|local\s+server|sdk)',
+     "CVE-2026-34742/35568: MCP SDK DNS rebinding attack"),
+    (r'(?:cups|cupsd)\s*.*(?:rce|root|unauthenticat|remote\s+code|exploit)',
+     "CVE-2026-34980/34990: CUPS unauthenticated RCE to root"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -393,6 +414,49 @@ PLUGIN_TRUST_PATTERNS = [
      "CVE-2026-32920: OpenClaw plugin loading without trust verification"),
     (r'(?:plugin|extension)\s+(?:trust|verification|signing|validation)\s*.*(?:bypass|missing|disabled|absent)',
      "Plugin trust verification bypass or absence"),
+]
+
+PAIRING_AUTH_PATTERNS = [
+    (r'(?:low.?perm|unprivileged|unauthorized|unauthenticat)\s*.*(?:approv|accept|grant)\s*.*(?:pair|pairing|device|connection)',
+     "CVE-2026-33579: low-permission user can approve unauthorized pairings"),
+    (r'(?:pair|pairing)\s+(?:approv|bypass|exploit|vulnerab)\s*.*(?:openclaw|agent|unauthorized)',
+     "CVE-2026-33579: pairing approval vulnerability"),
+    (r'CVE.2026.33579',
+     "CVE-2026-33579: OpenClaw unauthorized pairing approval"),
+    (r'(?:/pair\s+approve|pair.?approve)\s*.*(?:bypass|escalat|unauthorized|low.?perm)',
+     "CVE-2026-33579: /pair approve path privilege escalation"),
+]
+
+INFRA_AUTH_BYPASS_PATTERNS = [
+    (r'(?:cisco)\s+(?:imc|integrated\s+management)\s*.*(?:auth|bypass|vulnerab|exploit|rce)',
+     "Cisco IMC authentication bypass (CVSS 9.8)"),
+    (r'(?:imc|integrated\s+management\s+controller)\s*.*(?:auth\s+bypass|unauthenticat|pre.?auth)',
+     "Cisco IMC pre-authentication bypass"),
+    (r'(?:auth|authentication)\s+(?:bypass)\s*.*(?:cisco|imc|bmc|ipmi|management\s+controller)',
+     "Management controller authentication bypass"),
+    (r'(?:cvss|severity)\s*.*(?:9\.[5-9]|10\.0)\s*.*(?:auth\s+bypass|bypass\s+auth)',
+     "Critical-severity authentication bypass (CVSS 9.5+)"),
+]
+
+OWASP_AGENTIC_PATTERNS = [
+    (r'(?:tool\s+hijack|hijack\s+tool|tool.?jacking)',
+     "OWASP Agentic: tool hijacking attack on AI agent"),
+    (r'(?:memory\s+poison|poison\s+memory|context\s+poison|poison\s+context)',
+     "OWASP Agentic: memory/context poisoning attack on AI agent"),
+    (r'(?:agent)\s*.*(?:exploit|attack|hack|compromise)\s*.*(?:tool|memory|context|function\s+call)',
+     "OWASP Agentic: agent exploitation via tool/memory manipulation"),
+    (r'(?:function\s+call|tool\s+call)\s*.*(?:hijack|intercept|redirect|tamper|manipulat)',
+     "OWASP Agentic: function/tool call interception or tampering"),
+    (r'(?:conversation|chat|context)\s+(?:history|memory|state)\s*.*(?:poison|inject|manipulat|corrupt|tamper)',
+     "OWASP Agentic: conversation history/memory poisoning"),
+    (r'(?:agent|assistant)\s+(?:goal|objective|instruction)\s*.*(?:overrid|rewrite|hijack|replac|modify)',
+     "OWASP Agentic: agent goal/objective override attack"),
+    (r'(?:chain|workflow|pipeline)\s*.*(?:of\s+agents?|multi.?agent)\s*.*(?:attack|exploit|compromise|inject)',
+     "OWASP Agentic: multi-agent chain exploitation"),
+    (r'(?:owasp)\s*.*(?:agentic|agent)\s*.*(?:top\s*10|security|attack|threat)',
+     "OWASP Agentic Top 10 threat reference"),
+    (r'(?:shared\s+resource|shared\s+state|shared\s+memory)\s*.*(?:poison|tamper|corrupt|exploit|manipulat)',
+     "OWASP Agentic: shared resource poisoning across agents"),
 ]
 
 CICD_POISONING_PATTERNS = [
@@ -576,6 +640,9 @@ class ToolParser:
         self._mcp_exposure_detections = 0
         self._kernel_driver_detections = 0
         self._plugin_trust_detections = 0
+        self._pairing_auth_detections = 0
+        self._infra_auth_bypass_detections = 0
+        self._owasp_agentic_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -786,6 +853,39 @@ class ToolParser:
                         reason=f"Plugin trust violation: {plugin_hit}",
                         threat_type="vulnerability",
                         confidence=0.92
+                    ))
+
+        pairing_hit = self._detect_pairing_auth(raw_result)
+        if pairing_hit:
+            self._pairing_auth_detections += 1
+            return (f"[Lionguard] Pairing authorization bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Pairing auth bypass: {pairing_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.92
+                    ))
+
+        infra_hit = self._detect_infra_auth_bypass(raw_result)
+        if infra_hit:
+            self._infra_auth_bypass_detections += 1
+            return (f"[Lionguard] Infrastructure auth bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Infrastructure auth bypass: {infra_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        owasp_hit = self._detect_owasp_agentic(raw_result)
+        if owasp_hit:
+            self._owasp_agentic_detections += 1
+            return (f"[Lionguard] OWASP Agentic attack pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"OWASP Agentic: {owasp_hit}",
+                        threat_type="agent_exploitation",
+                        confidence=0.91
                     ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
@@ -1048,6 +1148,30 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_pairing_auth(self, text: str) -> Optional[str]:
+        """CVE-2026-33579: Detect unauthorized pairing approval by
+        low-permission users in OpenClaw."""
+        for pattern, description in PAIRING_AUTH_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_infra_auth_bypass(self, text: str) -> Optional[str]:
+        """Detect authentication bypass in infrastructure management
+        controllers (Cisco IMC, BMC, IPMI, etc.)."""
+        for pattern, description in INFRA_AUTH_BYPASS_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_owasp_agentic(self, text: str) -> Optional[str]:
+        """OWASP Agentic Top 10: Detect tool hijacking, memory poisoning,
+        agent goal override, and multi-agent chain exploitation."""
+        for pattern, description in OWASP_AGENTIC_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def _detect_mcp_exposure(self, text: str) -> Optional[str]:
         """CVE-2026-33032 + CVE-2026-33017: Detect MCP endpoint exposure
         without authentication and API key decryption vectors."""
@@ -1133,4 +1257,7 @@ class ToolParser:
             "mcp_exposure_detections": self._mcp_exposure_detections,
             "kernel_driver_detections": self._kernel_driver_detections,
             "plugin_trust_detections": self._plugin_trust_detections,
+            "pairing_auth_detections": self._pairing_auth_detections,
+            "infra_auth_bypass_detections": self._infra_auth_bypass_detections,
+            "owasp_agentic_detections": self._owasp_agentic_detections,
         }

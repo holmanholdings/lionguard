@@ -70,6 +70,13 @@ v0.13.0 patches (from Prowl 2026-03-29 to 2026-04-01 -- multi-day batch):
 - VEN0m ransomware BYOVD (signed IObit driver bypass)
 - Batch OpenClaw 2026.3.11-3.13 notables (9 new CVE signatures)
 
+v0.14.0 patches (from Prowl 2026-04-02 to 2026-04-08 -- multi-day catch-up):
+- CVE-2026-33579: OpenClaw unauthorized pairing approval
+- Cisco IMC authentication bypass (CVSS 9.8)
+- OWASP Agentic Top 10: tool hijacking, memory poisoning, agent exploitation
+- Notable batch: FastMCP, Claude Code CLI, LiteLLM, MCP SDK DNS rebinding,
+  CUPS RCE, OpenClaw PKCE exposure
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -343,7 +350,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.13.0",
+            "version": "0.14.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),
