@@ -77,6 +77,15 @@ v0.14.0 patches (from Prowl 2026-04-02 to 2026-04-08 -- multi-day catch-up):
 - Notable batch: FastMCP, Claude Code CLI, LiteLLM, MCP SDK DNS rebinding,
   CUPS RCE, OpenClaw PKCE exposure
 
+v0.15.0 patches (from Prowl 2026-04-09 to 2026-04-13 -- multi-day catch-up):
+- CVE-2026-39981: AGiXT file read/write/delete via safe_join() path traversal
+- CVE-2026-40088: PraisonAI command injection via YAML/LLM tool calls
+- CVE-2026-40160: PraisonAI web_crawl SSRF to internal/cloud metadata
+- CVE-2026-3690: OpenClaw Canvas authentication bypass
+- CVE-2026-3689: OpenClaw Canvas path traversal information disclosure
+- CVE-2025-8061: Ring-0 privilege escalation from user-land
+- Notable batch: LangChain, Apollo MCP, FastGPT, OpenClaw ANSI escape, PraisonAI MCP
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -350,7 +359,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.14.0",
+            "version": "0.15.0",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

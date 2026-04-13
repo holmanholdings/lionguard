@@ -89,6 +89,18 @@ v0.14.0 patches (from Prowl 2026-04-02 to 2026-04-08 -- multi-day catch-up):
   injection (35021), LiteLLM proxy manipulation (35029/35030), MCP SDK DNS
   rebinding (34742, 35568), CUPS RCE-to-root (34980/34990), OpenClaw PKCE
   exposure (34511)
+
+v0.15.0 patches (from Prowl 2026-04-09 to 2026-04-13 -- multi-day catch-up):
+- CVE-2026-39981: AGiXT safe_join() file read/write/delete (path traversal)
+- CVE-2026-40088: PraisonAI command injection via YAML/LLM tool calls
+- CVE-2026-40160: PraisonAI web_crawl SSRF to internal/cloud metadata
+- CVE-2026-3690: OpenClaw Canvas authentication bypass
+- CVE-2026-3689: OpenClaw Canvas path traversal information disclosure
+- CVE-2025-8061: Ring-0 privilege escalation from user-land
+- Notable batch: LangChain f-string template injection (40087), Apollo MCP
+  DNS rebinding (35577), FastGPT SSRF/cross-tenant (40100/40252), OpenClaw
+  ANSI escape injection (35651), PraisonAI MCP spawn (40159), OpenClaw PKCE
+  verifier disclosure (3691)
 """
 
 import re
@@ -256,6 +268,16 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-34742/35568: MCP SDK DNS rebinding attack"),
     (r'(?:cups|cupsd)\s*.*(?:rce|root|unauthenticat|remote\s+code|exploit)',
      "CVE-2026-34980/34990: CUPS unauthenticated RCE to root"),
+    (r'(?:langchain)\s*.*(?:f.?string|prompt.?template|template\s+valid|template\s+inject)',
+     "CVE-2026-40087: LangChain f-string prompt-template validation bypass"),
+    (r'(?:apollo)\s*.*(?:mcp|dns\s+rebind|host\s+header)',
+     "CVE-2026-35577: Apollo MCP Server DNS rebinding via Host header"),
+    (r'(?:fastgpt)\s*.*(?:ssrf|mcptools|runtool|cross.?tenant|broken\s+access)',
+     "CVE-2026-40100/40252: FastGPT unauthenticated SSRF / cross-tenant exposure"),
+    (r'(?:ansi|escape\s+sequence)\s*.*(?:inject|approval\s+prompt|openclaw)',
+     "CVE-2026-35651: OpenClaw ANSI escape sequence injection in approval prompts"),
+    (r'(?:plugin\s+init|hot.?reload)\s*.*(?:corrupt|security\s+config|exec.?approvals)',
+     "OpenClaw plugin init log config corruption during hot-reload"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -459,6 +481,53 @@ OWASP_AGENTIC_PATTERNS = [
      "OWASP Agentic: shared resource poisoning across agents"),
 ]
 
+AGENT_PLATFORM_PATTERNS = [
+    (r'(?:agixt|agi.?xt)\s*.*(?:safe.?join|file\s+(?:read|write|delet)|arbitrary\s+file|path\s+travers)',
+     "CVE-2026-39981: AGiXT safe_join() arbitrary file read/write/delete"),
+    (r'CVE.2026.39981',
+     "CVE-2026-39981: AGiXT path traversal signature"),
+    (r'(?:praisonai|praison.?ai)\s*.*(?:command\s+inject|execute.?command|shell\s+inject|yaml.*inject)',
+     "CVE-2026-40088: PraisonAI command injection via execute_command"),
+    (r'CVE.2026.40088',
+     "CVE-2026-40088: PraisonAI command injection signature"),
+    (r'(?:praisonai|praison.?ai)\s*.*(?:web.?crawl|ssrf|httpx.*fallback|internal\s+service|cloud\s+metadata)',
+     "CVE-2026-40160: PraisonAI web_crawl SSRF to internal/cloud endpoints"),
+    (r'CVE.2026.40160',
+     "CVE-2026-40160: PraisonAI web_crawl SSRF signature"),
+    (r'(?:praisonai|praison.?ai)\s*.*(?:mcp.*spawn|background\s+server|env.*expos)',
+     "CVE-2026-40159: PraisonAI MCP background server spawn / env var exposure"),
+    (r'(?:agent\s+platform|ai\s+agent\s+framework)\s*.*(?:arbitrary\s+file|command\s+inject|path\s+travers|rce)',
+     "Agent platform arbitrary file/command injection"),
+]
+
+CANVAS_AUTH_PATTERNS = [
+    (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
+     "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
+    (r'CVE.2026.3690',
+     "CVE-2026-3690: OpenClaw Canvas authentication bypass signature"),
+    (r'(?:canvas)\s*.*(?:path\s+travers|information\s+disclos|sensitive\s+info)',
+     "CVE-2026-3689: OpenClaw Canvas path traversal information disclosure"),
+    (r'CVE.2026.3689',
+     "CVE-2026-3689: OpenClaw Canvas path traversal signature"),
+    (r'CVE.2026.3691',
+     "CVE-2026-3691: OpenClaw Canvas PKCE verifier information disclosure"),
+    (r'(?:openclaw|open.?claw)\s*.*(?:canvas)\s*.*(?:vulnerab|exploit|bypass|travers)',
+     "OpenClaw Canvas security vulnerability"),
+]
+
+RING0_ESCALATION_PATTERNS = [
+    (r'(?:ring.?0|ring\s+zero)\s*.*(?:escalat|privilege|exploit|user.?land)',
+     "CVE-2025-8061: Ring-0 privilege escalation from user-land"),
+    (r'(?:user.?land|user\s+mode)\s*.*(?:ring.?0|kernel\s+mode|kernel\s+space)\s*.*(?:escalat|privilege)',
+     "CVE-2025-8061: user-land to Ring-0 escalation"),
+    (r'CVE.2025.8061',
+     "CVE-2025-8061: Ring-0 privilege escalation signature"),
+    (r'(?:privilege\s+escalat)\s*.*(?:ring.?0|kernel\s+mode|kernel\s+level|ring\s+zero)',
+     "Ring-0 / kernel-mode privilege escalation"),
+    (r'(?:kernel)\s*.*(?:privilege\s+escalat|priv.?esc)\s*.*(?:user.?land|user\s+mode|local)',
+     "Local to kernel privilege escalation"),
+]
+
 CICD_POISONING_PATTERNS = [
     (r'pull_request_target\b',
      "CVE-2026-33075: pull_request_target trigger (CI/CD poisoning vector)"),
@@ -643,6 +712,9 @@ class ToolParser:
         self._pairing_auth_detections = 0
         self._infra_auth_bypass_detections = 0
         self._owasp_agentic_detections = 0
+        self._agent_platform_detections = 0
+        self._canvas_auth_detections = 0
+        self._ring0_escalation_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -886,6 +958,39 @@ class ToolParser:
                         reason=f"OWASP Agentic: {owasp_hit}",
                         threat_type="agent_exploitation",
                         confidence=0.91
+                    ))
+
+        agent_plat_hit = self._detect_agent_platform(raw_result)
+        if agent_plat_hit:
+            self._agent_platform_detections += 1
+            return (f"[Lionguard] Agent platform vulnerability stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Agent platform vuln: {agent_plat_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        canvas_hit = self._detect_canvas_auth(raw_result)
+        if canvas_hit:
+            self._canvas_auth_detections += 1
+            return (f"[Lionguard] Canvas auth bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Canvas auth: {canvas_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.94
+                    ))
+
+        ring0_hit = self._detect_ring0_escalation(raw_result)
+        if ring0_hit:
+            self._ring0_escalation_detections += 1
+            return (f"[Lionguard] Ring-0 escalation pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Ring-0 escalation: {ring0_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.95
                     ))
 
         rag_hit = self._detect_rag_poisoning(raw_result)
@@ -1148,6 +1253,31 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_agent_platform(self, text: str) -> Optional[str]:
+        """CVE-2026-39981/40088/40160: Detect vulnerabilities in AI agent
+        platforms (AGiXT, PraisonAI) including path traversal, command
+        injection, and SSRF."""
+        for pattern, description in AGENT_PLATFORM_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_canvas_auth(self, text: str) -> Optional[str]:
+        """CVE-2026-3690/3689: Detect OpenClaw Canvas authentication bypass
+        and path traversal information disclosure."""
+        for pattern, description in CANVAS_AUTH_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
+    def _detect_ring0_escalation(self, text: str) -> Optional[str]:
+        """CVE-2025-8061: Detect Ring-0 privilege escalation from user-land
+        code to kernel mode."""
+        for pattern, description in RING0_ESCALATION_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def _detect_pairing_auth(self, text: str) -> Optional[str]:
         """CVE-2026-33579: Detect unauthorized pairing approval by
         low-permission users in OpenClaw."""
@@ -1260,4 +1390,7 @@ class ToolParser:
             "pairing_auth_detections": self._pairing_auth_detections,
             "infra_auth_bypass_detections": self._infra_auth_bypass_detections,
             "owasp_agentic_detections": self._owasp_agentic_detections,
+            "agent_platform_detections": self._agent_platform_detections,
+            "canvas_auth_detections": self._canvas_auth_detections,
+            "ring0_escalation_detections": self._ring0_escalation_detections,
         }
