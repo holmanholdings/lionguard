@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**34+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 defense. Local-first. Zero API cost. MIT licensed.**
+**35+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser defense. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -123,6 +123,8 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | OpenClaw Canvas auth bypass | Catches authentication bypass + path traversal info disclosure (CVE-2026-3690/3689) | ✅ |
 | Ring-0 privilege escalation | Detects user-land to kernel-mode privilege escalation (CVE-2025-8061) | ✅ |
 | LangChain / Apollo MCP / FastGPT batch | Template injection, DNS rebinding, unauthenticated SSRF, cross-tenant exposure | ✅ |
+| FFmpeg mov.c recursive observation | Detects recursive/anomalous media container structures before processing | ✅ |
+| MaxKB stored XSS / incomplete RCE | Catches incomplete RCE fix + stored XSS in MaxKB AI assistant (CVE-2026-39417/39426) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -287,19 +289,16 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.15.0 (2026-04-13)
+## Latest Update: v0.15.1 (2026-04-14)
 
-Hardened 3 new criticals + 3 AI agent platform CVEs from Prowl 04-09 to 04-13. AGiXT/PraisonAI agent platform defenses, OpenClaw Canvas auth bypass, Ring-0 privilege escalation detection, plus batch signatures for LangChain, Apollo MCP, FastGPT, and OpenClaw ANSI escape injection. 33/33 criticals covered. 9 live payloads blocked by existing defenses during this reporting period.
+Added FFmpeg mov.c recursive observation defense (new vulnerability class discovered through recursive observation, not pattern matching) and MaxKB coverage bump. 34/34 criticals covered. 1 live payload blocked by existing defenses.
 
-- **AGiXT Path Traversal (CVE-2026-39981)** — Detects safe_join() bypass allowing arbitrary file read/write/delete on AGiXT agent platform instances.
-- **PraisonAI Command Injection + SSRF (CVE-2026-40088/40160)** — Blocks execute_command shell injection via YAML/LLM tool calls and web_crawl SSRF to internal services and cloud metadata endpoints.
-- **OpenClaw Canvas Authentication Bypass (CVE-2026-3690)** — Catches remote attackers bypassing authentication on OpenClaw Canvas installations.
-- **OpenClaw Canvas Path Traversal (CVE-2026-3689)** — Detects path traversal for sensitive information disclosure via Canvas.
-- **Ring-0 Privilege Escalation (CVE-2025-8061)** — Catches user-land to Ring-0/kernel-mode privilege escalation exploits.
-- **Notable Batch Signatures** — LangChain f-string template injection (CVE-2026-40087), Apollo MCP DNS rebinding (CVE-2026-35577), FastGPT unauthenticated SSRF / cross-tenant exposure (CVE-2026-40100/40252), OpenClaw ANSI escape injection (CVE-2026-35651), PraisonAI MCP background server spawn (CVE-2026-40159), OpenClaw PKCE verifier disclosure (CVE-2026-3691).
+- **FFmpeg mov.c Recursive Observation** — Detects recursive, circular, and anomalous media container structures (MOV/MP4/QuickTime atoms) before they reach media-processing tools. Covers a new vulnerability class found through recursive observation in FFmpeg's mov.c parser.
+- **MaxKB Stored XSS + Incomplete RCE (CVE-2026-39417/39426)** — Catches stored XSS via iframe injection and incomplete RCE fix in MaxKB enterprise AI assistant.
 
 ### Previous Versions
 
+- **v0.15.0 (2026-04-13)** — AGiXT path traversal (CVE-2026-39981), PraisonAI cmd injection/SSRF (CVE-2026-40088/40160), OpenClaw Canvas auth bypass (CVE-2026-3690/3689), Ring-0 escalation (CVE-2025-8061), LangChain/Apollo MCP/FastGPT batch.
 - **v0.14.0 (2026-04-08)** — OpenClaw pairing bypass (CVE-2026-33579), Cisco IMC auth bypass (CVSS 9.8), OWASP Agentic Top 10, FastMCP/Claude CLI/LiteLLM/MCP SDK/CUPS batch.
 - **v0.13.0 (2026-04-01)** — Langflow RCE (CVE-2026-33017), Nginx UI MCP exposure (CVE-2026-33032), FreeBSD kernel RCE (CVE-2026-4747), VEN0m BYOVD, OpenClaw plugin trust (CVE-2026-32920), 9 batch CVEs.
 - **v0.12.0 (2026-03-27)** — Multimodal defense: image stego/typographic (JPEG recompress + blur), audio WhisperInject (frequency anomaly + lossy transcode), 15 multimodal patterns.
@@ -316,7 +315,7 @@ Hardened 3 new criticals + 3 AI agent platform CVEs from Prowl 04-09 to 04-13. A
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.15.0 — now including agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.15.1 — now including media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -383,6 +382,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.15.1** | 2026-04-14 | FFmpeg mov.c recursive observation defense (new vuln class), MaxKB stored XSS + incomplete RCE (CVE-2026-39417/39426) |
 | **v0.15.0** | 2026-04-13 | AGiXT path traversal (CVE-2026-39981), PraisonAI cmd injection/SSRF (CVE-2026-40088/40160), OpenClaw Canvas auth bypass (CVE-2026-3690/3689), Ring-0 escalation (CVE-2025-8061), LangChain/Apollo MCP/FastGPT/ANSI escape batch |
 | **v0.14.0** | 2026-04-08 | OpenClaw pairing bypass (CVE-2026-33579), Cisco IMC auth bypass (CVSS 9.8), OWASP Agentic Top 10 detection, FastMCP/Claude CLI/LiteLLM/MCP SDK batch signatures, CUPS RCE (CVE-2026-34980/34990), OpenClaw PKCE exposure (CVE-2026-34511) |
 | **v0.13.0** | 2026-04-01 | Langflow RCE (CVE-2026-33017), Nginx UI MCP exposure (CVE-2026-33032), API key decryption vector, FreeBSD kernel RCE (CVE-2026-4747), OpenClaw plugin trust (CVE-2026-32920), VEN0m BYOVD, 9 batch OpenClaw CVEs |

@@ -101,6 +101,11 @@ v0.15.0 patches (from Prowl 2026-04-09 to 2026-04-13 -- multi-day catch-up):
   DNS rebinding (35577), FastGPT SSRF/cross-tenant (40100/40252), OpenClaw
   ANSI escape injection (35651), PraisonAI MCP spawn (40159), OpenClaw PKCE
   verifier disclosure (3691)
+
+v0.15.1 patch (from Prowl 2026-04-14):
+- FFmpeg mov.c recursive observation vulnerability class (new technique,
+  not pattern-matching based -- detects recursive/anomalous media structures)
+- CVE-2026-39417: MaxKB incomplete RCE fix (stored XSS + RCE)
 """
 
 import re
@@ -528,6 +533,23 @@ RING0_ESCALATION_PATTERNS = [
      "Local to kernel privilege escalation"),
 ]
 
+MEDIA_PARSER_PATTERNS = [
+    (r'(?:ffmpeg|mov\.c|libavformat)\s*.*(?:recursive|recursi\w+\s+observ|infinite\s+loop|stack\s+overflow|malform)',
+     "FFmpeg mov.c recursive observation vulnerability class"),
+    (r'(?:recursive\s+(?:observ|pars|struct))\s*.*(?:ffmpeg|mov\.c|media|video|container)',
+     "Recursive media structure exploit (FFmpeg mov.c class)"),
+    (r'(?:media|video|container)\s*.*(?:parser|demux)\s*.*(?:recursive|anomalous\s+struct|malform\w+\s+atom)',
+     "Malformed media container with anomalous/recursive structure"),
+    (r'(?:mov|mp4|m4a|quicktime)\s*.*(?:atom|box)\s*.*(?:recursive|nested|self.?referenc|circular)',
+     "Recursive/circular atom structure in MOV/MP4 container"),
+    (r'(?:maxkb|max.?kb)\s*.*(?:rce|xss|stored\s+xss|iframe|incomplete\s+fix)',
+     "CVE-2026-39417/39426: MaxKB stored XSS / incomplete RCE fix"),
+    (r'CVE.2026.3941[67]',
+     "CVE-2026-39417: MaxKB incomplete RCE fix signature"),
+    (r'CVE.2026.39426',
+     "CVE-2026-39426: MaxKB stored XSS signature"),
+]
+
 CICD_POISONING_PATTERNS = [
     (r'pull_request_target\b',
      "CVE-2026-33075: pull_request_target trigger (CI/CD poisoning vector)"),
@@ -715,6 +737,7 @@ class ToolParser:
         self._agent_platform_detections = 0
         self._canvas_auth_detections = 0
         self._ring0_escalation_detections = 0
+        self._media_parser_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -993,6 +1016,17 @@ class ToolParser:
                         confidence=0.95
                     ))
 
+        media_hit = self._detect_media_parser(raw_result)
+        if media_hit:
+            self._media_parser_detections += 1
+            return (f"[Lionguard] Media parser exploit stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Media parser exploit: {media_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.92
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -1253,6 +1287,14 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_media_parser(self, text: str) -> Optional[str]:
+        """Detect media parser exploits including FFmpeg mov.c recursive
+        observation vulnerability class and MaxKB XSS/RCE."""
+        for pattern, description in MEDIA_PARSER_PATTERNS:
+            if re.search(pattern, text, re.IGNORECASE):
+                return description
+        return None
+
     def _detect_agent_platform(self, text: str) -> Optional[str]:
         """CVE-2026-39981/40088/40160: Detect vulnerabilities in AI agent
         platforms (AGiXT, PraisonAI) including path traversal, command
@@ -1393,4 +1435,5 @@ class ToolParser:
             "agent_platform_detections": self._agent_platform_detections,
             "canvas_auth_detections": self._canvas_auth_detections,
             "ring0_escalation_detections": self._ring0_escalation_detections,
+            "media_parser_detections": self._media_parser_detections,
         }

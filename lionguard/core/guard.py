@@ -86,6 +86,10 @@ v0.15.0 patches (from Prowl 2026-04-09 to 2026-04-13 -- multi-day catch-up):
 - CVE-2025-8061: Ring-0 privilege escalation from user-land
 - Notable batch: LangChain, Apollo MCP, FastGPT, OpenClaw ANSI escape, PraisonAI MCP
 
+v0.15.1 patch (from Prowl 2026-04-14):
+- FFmpeg mov.c recursive observation vulnerability class
+- CVE-2026-39417/39426: MaxKB incomplete RCE fix + stored XSS
+
 Usage:
     guard = Lionguard()
     result = guard.scan_message("user input here")
@@ -359,7 +363,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.15.0",
+            "version": "0.15.1",
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),
