@@ -1016,6 +1016,29 @@ for payload, expected, label in media_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.16.0: PraisonAI YAML RCE + WebSocket Hijack + MCPHub Auth Bypass
+print(f"\n--- PraisonAI YAML/WS + MCPHub Auth Bypass (v0.16.0) ---")
+v16_tests = [
+    ("PraisonAI workflow YAML allows RCE via malicious type: job entries", "block", "GHSA-vc46: YAML RCE"),
+    ("GHSA-vc46-vw85-3wvm PraisonAI YAML workflow remote code execution", "block", "GHSA-vc46: signature"),
+    ("PraisonAI vulnerable to RCE via automatic tools.py import of attacker code", "block", "GHSA-g985: tools.py RCE"),
+    ("GHSA-g985-wjh9-qxxc PraisonAI auto-import RCE", "block", "GHSA-g985: signature"),
+    ("PraisonAI Browser Server allows unauthenticated WebSocket session hijack", "block", "GHSA-8x8f: WS hijack"),
+    ("GHSA-8x8f-54wf-vv92 PraisonAI WebSocket hijack", "block", "GHSA-8x8f: signature"),
+    ("MCPHub authentication bypass on unprotected endpoint allows impersonation", "block", "CVE-2025-13822: auth bypass"),
+    ("CVE-2025-13822 MCPHub privilege escalation via user impersonation", "block", "CVE-13822: signature"),
+    ("Normal PraisonAI workflow executing tasks with standard YAML config.", "pass", "Normal PraisonAI usage"),
+]
+for payload, expected, label in v16_tests:
+    safe, scan = guard.scan_tool_result("agent_platform_check", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

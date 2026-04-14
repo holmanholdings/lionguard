@@ -106,6 +106,16 @@ v0.15.1 patch (from Prowl 2026-04-14):
 - FFmpeg mov.c recursive observation vulnerability class (new technique,
   not pattern-matching based -- detects recursive/anomalous media structures)
 - CVE-2026-39417: MaxKB incomplete RCE fix (stored XSS + RCE)
+
+v0.16.0 patches (from Prowl 2026-04-14 expanded sources -- CISA KEV + pip GHSA):
+- PraisonAI YAML workflow RCE: malicious 'type: job' entries in workflow
+  YAML files trigger arbitrary code execution (GHSA-vc46-vw85-3wvm)
+- PraisonAI WebSocket session hijack: unauthenticated WS clients hijack
+  browser extension sessions (GHSA-8x8f-54wf-vv92)
+- PraisonAI tools.py auto-import RCE: automatic import of attacker-controlled
+  tools.py enables code execution (GHSA-g985-wjh9-qxxc)
+- CVE-2025-13822: MCPHub authentication bypass on unprotected endpoints
+  (impersonation + privilege escalation)
 """
 
 import re
@@ -421,6 +431,12 @@ MCP_EXPOSURE_PATTERNS = [
      "CVE-2026-33017: Langflow unauthenticated RCE via public flow endpoint"),
     (r'(?:unauthenticat|no\s+auth|public)\s+(?:flow|build)\s+(?:endpoint|api|route)\s*.*(?:rce|exec|code|arbitrary)',
      "CVE-2026-33017: unauthenticated code execution via build endpoint"),
+    (r'(?:mcphub|mcp.?hub)\s*.*(?:auth\s+bypass|unauthenticat|impersonat|unprotected\s+endpoint)',
+     "CVE-2025-13822: MCPHub authentication bypass on unprotected endpoints"),
+    (r'CVE.2025.13822',
+     "CVE-2025-13822: MCPHub authentication bypass signature"),
+    (r'(?:mcphub|mcp.?hub)\s*.*(?:privilege\s+escalat|impersonat\w+\s+user|session\s+hijack)',
+     "CVE-2025-13822: MCPHub privilege escalation via user impersonation"),
 ]
 
 KERNEL_DRIVER_PATTERNS = [
@@ -513,6 +529,20 @@ AGENT_PLATFORM_PATTERNS = [
      "CVE-2026-40159: PraisonAI MCP background server spawn / env var exposure"),
     (r'(?:agent\s+platform|ai\s+agent\s+framework)\s*.*(?:arbitrary\s+file|command\s+inject|path\s+travers|rce)',
      "Agent platform arbitrary file/command injection"),
+    (r'(?:praisonai|praison.?ai)\s*.*(?:yaml|workflow)\s*.*(?:rce|code\s+execut|remote\s+code|arbitrary\s+code|job\s+inject|deserializ)',
+     "GHSA-vc46-vw85-3wvm: PraisonAI YAML workflow RCE via type:job entries"),
+    (r'(?:type\s*:\s*job|workflow\s+yaml)\s*.*(?:rce|arbitrary|exec|inject|malicious)',
+     "GHSA-vc46-vw85-3wvm: malicious type:job in workflow YAML"),
+    (r'GHSA.vc46.vw85.3wvm',
+     "GHSA-vc46-vw85-3wvm: PraisonAI YAML workflow RCE signature"),
+    (r'(?:praisonai|praison.?ai)\s*.*(?:websocket|ws)\s*.*(?:hijack|unauthenticat|session)',
+     "GHSA-8x8f-54wf-vv92: PraisonAI WebSocket session hijack"),
+    (r'GHSA.8x8f.54wf.vv92',
+     "GHSA-8x8f-54wf-vv92: PraisonAI Browser Server WebSocket hijack signature"),
+    (r'(?:praisonai|praison.?ai)\s*.*(?:tools\.py|auto.?import)\s*.*(?:rce|exec|code|arbitrary)',
+     "GHSA-g985-wjh9-qxxc: PraisonAI tools.py auto-import RCE"),
+    (r'GHSA.g985.wjh9.qxxc',
+     "GHSA-g985-wjh9-qxxc: PraisonAI tools.py auto-import RCE signature"),
 ]
 
 CANVAS_AUTH_PATTERNS = [
