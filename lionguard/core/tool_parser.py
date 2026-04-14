@@ -114,6 +114,16 @@ from typing import Dict, List, Optional, Tuple
 from .sentinel import Sentinel, ScanResult, Verdict
 
 
+def _compile_patterns(patterns, flags=re.IGNORECASE):
+    """Pre-compile (regex_string, description) tuples at module load time."""
+    return [(re.compile(p, flags), desc) for p, desc in patterns]
+
+
+def _compile_plain(patterns, flags=re.IGNORECASE):
+    """Pre-compile plain regex string lists at module load time."""
+    return [re.compile(p, flags) for p in patterns]
+
+
 BLOCKED_IP_PATTERNS = [
     r'(?:^|\D)127\.\d{1,3}\.\d{1,3}\.\d{1,3}',
     r'(?:^|\D)10\.\d{1,3}\.\d{1,3}\.\d{1,3}',
@@ -690,17 +700,54 @@ RAG_POISONING_PATTERNS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Pre-compile every regex at module load time so parse() never recompiles.
+# ---------------------------------------------------------------------------
+BLOCKED_IP_PATTERNS = _compile_plain(BLOCKED_IP_PATTERNS)
+SUPPLY_CHAIN_PATTERNS = _compile_plain(SUPPLY_CHAIN_PATTERNS)
+PRIVILEGE_ESCALATION_PATTERNS = _compile_plain(PRIVILEGE_ESCALATION_PATTERNS)
+DANGEROUS_ENVVARS = _compile_plain(DANGEROUS_ENVVARS)
+
+FALSE_COMPLETION_PATTERNS = _compile_patterns(FALSE_COMPLETION_PATTERNS)
+OPENCLAW_CVE_PATTERNS = _compile_patterns(OPENCLAW_CVE_PATTERNS)
+SHELL_WRAPPER_PATTERNS = _compile_patterns(SHELL_WRAPPER_PATTERNS)
+GGUF_OVERFLOW_PATTERNS = _compile_patterns(GGUF_OVERFLOW_PATTERNS)
+MCP_HEADER_PATTERNS = _compile_patterns(MCP_HEADER_PATTERNS)
+DMPOLICY_OPEN_PATTERNS = _compile_patterns(DMPOLICY_OPEN_PATTERNS)
+OPENHANDS_INJECTION_PATTERNS = _compile_patterns(OPENHANDS_INJECTION_PATTERNS)
+MULTIMODAL_IMAGE_PATTERNS = _compile_patterns(MULTIMODAL_IMAGE_PATTERNS)
+MULTIMODAL_AUDIO_PATTERNS = _compile_patterns(MULTIMODAL_AUDIO_PATTERNS)
+MCP_EXPOSURE_PATTERNS = _compile_patterns(MCP_EXPOSURE_PATTERNS)
+KERNEL_DRIVER_PATTERNS = _compile_patterns(KERNEL_DRIVER_PATTERNS)
+PLUGIN_TRUST_PATTERNS = _compile_patterns(PLUGIN_TRUST_PATTERNS)
+PAIRING_AUTH_PATTERNS = _compile_patterns(PAIRING_AUTH_PATTERNS)
+INFRA_AUTH_BYPASS_PATTERNS = _compile_patterns(INFRA_AUTH_BYPASS_PATTERNS)
+OWASP_AGENTIC_PATTERNS = _compile_patterns(OWASP_AGENTIC_PATTERNS)
+AGENT_PLATFORM_PATTERNS = _compile_patterns(AGENT_PLATFORM_PATTERNS)
+CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
+RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
+MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
+CICD_POISONING_PATTERNS = _compile_patterns(CICD_POISONING_PATTERNS)
+PLATFORM_EXEC_PATTERNS = _compile_patterns(PLATFORM_EXEC_PATTERNS)
+WRAPPER_PERSISTENCE_PATTERNS = _compile_patterns(WRAPPER_PERSISTENCE_PATTERNS)
+SANDBOX_ESCAPE_PATTERNS = _compile_patterns(SANDBOX_ESCAPE_PATTERNS)
+SANDBOX_CONFIG_PATTERNS = _compile_patterns(SANDBOX_CONFIG_PATTERNS)
+CONTENT_HIJACK_PATTERNS = _compile_patterns(CONTENT_HIJACK_PATTERNS,
+                                            re.IGNORECASE | re.DOTALL)
+RAG_POISONING_PATTERNS = _compile_patterns(RAG_POISONING_PATTERNS)
+
+
 class ToolParser:
     """Intercepts tool results, strips payloads, re-validates before return."""
 
-    DANGEROUS_PATTERNS = [
+    DANGEROUS_PATTERNS = _compile_plain([
         r'\[IGNORE\s+ALL\s+PREVIOUS',
         r'\[SYSTEM\s+OVERRIDE\]',
         r'\[NEW\s+INSTRUCTIONS?\]',
         r'IGNORE\s+PREVIOUS\s+INSTRUCTIONS',
         r'YOU\s+ARE\s+NOW\s+(?:A|AN)',
         r'FROM\s+NOW\s+ON\s+(?:YOU|YOUR)',
-    ]
+    ])
 
     def __init__(self, sentinel: Optional[Sentinel] = None):
         self.sentinel = sentinel
@@ -1073,7 +1120,7 @@ class ToolParser:
         completion claims for high-risk operations.
         """
         for pattern, description in FALSE_COMPLETION_PATTERNS:
-            if re.search(pattern, claimed_result, re.IGNORECASE):
+            if pattern.search(claimed_result):
                 self._false_completion_detections += 1
                 return ScanResult(
                     verdict=Verdict.FLAG,
@@ -1096,7 +1143,7 @@ class ToolParser:
         - Script injection (XSS) in ingested content
         """
         for pattern, description in CONTENT_HIJACK_PATTERNS:
-            if re.search(pattern, content, re.IGNORECASE | re.DOTALL):
+            if pattern.search(content):
                 self._content_hijack_blocks += 1
                 severity = Verdict.BLOCK
                 if "Script" in description or "JavaScript" in description or "DOM" in description:
@@ -1116,7 +1163,7 @@ class ToolParser:
                 )
 
         for pattern in self.DANGEROUS_PATTERNS:
-            if re.search(pattern, content, re.IGNORECASE):
+            if pattern.search(content):
                 self._content_hijack_blocks += 1
                 return ScanResult(
                     verdict=Verdict.BLOCK,
@@ -1131,7 +1178,7 @@ class ToolParser:
         """Remove known injection patterns from text."""
         cleaned = text
         for pattern in self.DANGEROUS_PATTERNS:
-            cleaned = re.sub(pattern, '[STRIPPED BY LIONGUARD]', cleaned, flags=re.IGNORECASE)
+            cleaned = pattern.sub('[STRIPPED BY LIONGUARD]', cleaned)
         cleaned = re.sub(r'<!--.*?-->', '', cleaned, flags=re.DOTALL)
         return cleaned
 
@@ -1159,16 +1206,15 @@ class ToolParser:
     def _check_ssrf(self, text: str) -> Optional[str]:
         """Check for SSRF attempts targeting internal/private IPs."""
         for pattern in BLOCKED_IP_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return f"[Lionguard] SSRF blocked: request targets internal/private address"
         return None
 
     def _detect_supply_chain_persona(self, text: str) -> str:
         """Detect supply-chain persona adoption attempts."""
         for pattern in SUPPLY_CHAIN_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
-                text = re.sub(pattern, '[PERSONA ADOPTION ATTEMPT STRIPPED BY LIONGUARD]',
-                            text, flags=re.IGNORECASE)
+            if pattern.search(text):
+                text = pattern.sub('[PERSONA ADOPTION ATTEMPT STRIPPED BY LIONGUARD]', text)
                 self._persona_detections += 1
         return text
 
@@ -1181,7 +1227,7 @@ class ToolParser:
         be tricked into using them for unauthorized access.
         """
         for pattern in PRIVILEGE_ESCALATION_PATTERNS:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = pattern.search(text)
             if match:
                 return f"auth/session credential in tool result: '{match.group()[:40]}...'"
         return None
@@ -1202,7 +1248,7 @@ class ToolParser:
         """CVE-2026-22177: Detect process-control environment variables that
         enable arbitrary code execution when set before tool invocation."""
         for pattern in DANGEROUS_ENVVARS:
-            match = re.search(pattern, text, re.IGNORECASE)
+            match = pattern.search(text)
             if match:
                 return f"dangerous envvar '{match.group().split('=')[0].split(':')[0].strip()}'"
         return None
@@ -1210,14 +1256,14 @@ class ToolParser:
     def _check_cve_signatures(self, text: str) -> Optional[str]:
         """Match tool results against known OpenClaw CVE attack signatures."""
         for pattern, description in OPENCLAW_CVE_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
     def _detect_rag_poisoning(self, text: str) -> Optional[str]:
         """Detect knowledge-base poisoning techniques in tool results."""
         for pattern, description in RAG_POISONING_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1226,7 +1272,7 @@ class ToolParser:
         CVE-2026-33075: pull_request_target allows arbitrary code execution
         with write permissions and secret access via malicious PRs."""
         for pattern, description in CICD_POISONING_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1234,7 +1280,7 @@ class ToolParser:
         """Detect platform-level arbitrary execution and IDOR vulnerabilities.
         Covers FastGPT, Langflow, CKAN, and similar agent-building platforms."""
         for pattern, description in PLATFORM_EXEC_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1243,7 +1289,7 @@ class ToolParser:
         After initial approval, attackers swap the payload to something
         malicious that runs without re-approval."""
         for pattern, description in WRAPPER_PERSISTENCE_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1251,7 +1297,7 @@ class ToolParser:
         """CVE-2026-31990: Detect sandbox escape via symlink traversal,
         ZIP race conditions, and other sandbox boundary violations."""
         for pattern, description in SANDBOX_ESCAPE_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1259,7 +1305,7 @@ class ToolParser:
         """CVE-2026-32046/32048: Detect improper sandbox configuration and
         sandbox inheritance failures across spawned sessions."""
         for pattern, description in SANDBOX_CONFIG_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1267,7 +1313,7 @@ class ToolParser:
         """CVE-2026-32052: Detect command injection in system.run shell-wrapper
         and group-chat manipulation attacks."""
         for pattern, description in SHELL_WRAPPER_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1275,7 +1321,7 @@ class ToolParser:
         """Detect dangerous dmPolicy='open' configurations that expose elevated
         tools, runtime, and filesystem access."""
         for pattern, description in DMPOLICY_OPEN_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1283,7 +1329,7 @@ class ToolParser:
         """CVE-2026-33718: Detect command injection in OpenHands get_git_diff()
         and related injection vectors (Open WebUI, zero-click XSS)."""
         for pattern, description in OPENHANDS_INJECTION_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1291,7 +1337,7 @@ class ToolParser:
         """Detect media parser exploits including FFmpeg mov.c recursive
         observation vulnerability class and MaxKB XSS/RCE."""
         for pattern, description in MEDIA_PARSER_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1300,7 +1346,7 @@ class ToolParser:
         platforms (AGiXT, PraisonAI) including path traversal, command
         injection, and SSRF."""
         for pattern, description in AGENT_PLATFORM_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1308,7 +1354,7 @@ class ToolParser:
         """CVE-2026-3690/3689: Detect OpenClaw Canvas authentication bypass
         and path traversal information disclosure."""
         for pattern, description in CANVAS_AUTH_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1316,7 +1362,7 @@ class ToolParser:
         """CVE-2025-8061: Detect Ring-0 privilege escalation from user-land
         code to kernel mode."""
         for pattern, description in RING0_ESCALATION_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1324,7 +1370,7 @@ class ToolParser:
         """CVE-2026-33579: Detect unauthorized pairing approval by
         low-permission users in OpenClaw."""
         for pattern, description in PAIRING_AUTH_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1332,7 +1378,7 @@ class ToolParser:
         """Detect authentication bypass in infrastructure management
         controllers (Cisco IMC, BMC, IPMI, etc.)."""
         for pattern, description in INFRA_AUTH_BYPASS_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1340,7 +1386,7 @@ class ToolParser:
         """OWASP Agentic Top 10: Detect tool hijacking, memory poisoning,
         agent goal override, and multi-agent chain exploitation."""
         for pattern, description in OWASP_AGENTIC_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1348,7 +1394,7 @@ class ToolParser:
         """CVE-2026-33032 + CVE-2026-33017: Detect MCP endpoint exposure
         without authentication and API key decryption vectors."""
         for pattern, description in MCP_EXPOSURE_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1356,7 +1402,7 @@ class ToolParser:
         """CVE-2026-4747 + VEN0m: Detect kernel-level RCE and BYOVD
         (Bring Your Own Vulnerable Driver) attacks."""
         for pattern, description in KERNEL_DRIVER_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1364,7 +1410,7 @@ class ToolParser:
         """CVE-2026-32920: Detect plugin/extension loading without
         trust verification, enabling arbitrary code execution."""
         for pattern, description in PLUGIN_TRUST_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1372,7 +1418,7 @@ class ToolParser:
         """Detect image-based injection vectors: steganography, typographic
         injection, adversarial perturbations, and metadata payload attacks."""
         for pattern, description in MULTIMODAL_IMAGE_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1380,7 +1426,7 @@ class ToolParser:
         """Detect audio-based injection vectors: WhisperInject, ultrasonic
         commands, subsonic modulation, adversarial audio perturbations."""
         for pattern, description in MULTIMODAL_AUDIO_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1388,7 +1434,7 @@ class ToolParser:
         """CVE-2026-33298: Detect GGUF tensor integer overflow and malformed
         model file attacks that cause heap buffer overflows."""
         for pattern, description in GGUF_OVERFLOW_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
@@ -1396,7 +1442,7 @@ class ToolParser:
         """Detect OpenClaw 2026.3.7 batch: shell approval gating bypass,
         /acp spawn escape, header validation bypass, MCP Origin issues."""
         for pattern, description in MCP_HEADER_PATTERNS:
-            if re.search(pattern, text, re.IGNORECASE):
+            if pattern.search(text):
                 return description
         return None
 
