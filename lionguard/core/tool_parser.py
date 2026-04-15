@@ -116,6 +116,17 @@ v0.16.0 patches (from Prowl 2026-04-14 expanded sources -- CISA KEV + pip GHSA):
   tools.py enables code execution (GHSA-g985-wjh9-qxxc)
 - CVE-2025-13822: MCPHub authentication bypass on unprotected endpoints
   (impersonation + privilege escalation)
+
+v0.17.0 patches (from Prowl 2026-04-15 -- largest sweep, 104 findings):
+- MCP STDIO config hijacking (new attack class): attackers modify local MCP
+  config to register malicious STDIO servers, triggering RCE when agent executes.
+  Covers CVE-2026-30615 (Windsurf), CVE-2026-30624 (Agent Zero),
+  CVE-2026-30616 (Jaaz), CVE-2026-30617 (LangChain-ChatChat)
+- CVE-2025-61260: OpenAI Codex CLI config poisoning -- malicious .env and
+  .codex/config.toml auto-loaded from cloned repos enable arbitrary code exec
+- MCP service batch: kubernetes arg injection (CVE-2026-39884), SkyWalking
+  SSRF (CVE-2026-34476), Splunk MCP token exposure (CVE-2026-20205),
+  Tolgee file read (CVE-2026-32251)
 """
 
 import re
@@ -439,6 +450,63 @@ MCP_EXPOSURE_PATTERNS = [
      "CVE-2025-13822: MCPHub privilege escalation via user impersonation"),
 ]
 
+MCP_STDIO_HIJACK_PATTERNS = [
+    (r'(?:windsurf|wind.?surf)\s*.*(?:prompt\s+inject|mcp\s+(?:config|stdio)|malicious\s+stdio|rce)',
+     "CVE-2026-30615: Windsurf prompt injection via malicious MCP STDIO server"),
+    (r'CVE.2026.30615',
+     "CVE-2026-30615: Windsurf MCP STDIO hijack signature"),
+    (r'(?:agent\s*zero|agentzero)\s*.*(?:rce|remote\s+code|mcp\s+server|external\s+mcp)',
+     "CVE-2026-30624: Agent Zero RCE via external MCP Servers configuration"),
+    (r'CVE.2026.30624',
+     "CVE-2026-30624: Agent Zero MCP RCE signature"),
+    (r'(?:jaaz)\s*.*(?:rce|remote\s+code|mcp\s+stdio|command\s+handler)',
+     "CVE-2026-30616: Jaaz RCE via MCP STDIO command handler"),
+    (r'CVE.2026.30616',
+     "CVE-2026-30616: Jaaz MCP STDIO RCE signature"),
+    (r'(?:langchain.?chat.?chat|langchain.?chat)\s*.*(?:rce|mcp\s+stdio|attacker.?controlled)',
+     "CVE-2026-30617: LangChain-ChatChat RCE via attacker MCP STDIO server"),
+    (r'CVE.2026.30617',
+     "CVE-2026-30617: LangChain-ChatChat MCP STDIO RCE signature"),
+    (r'(?:modif|register|inject|plant)\s*.*(?:local\s+mcp|mcp\s+config)\s*.*(?:malicious|attacker|rogue)\s*.*(?:stdio|server)',
+     "MCP STDIO config hijack: register malicious server via config modification"),
+    (r'(?:malicious|rogue|attacker)\s+(?:stdio|mcp)\s+(?:server|handler)\s*.*(?:rce|exec|command|arbitrary)',
+     "MCP STDIO config hijack: malicious server enables RCE"),
+    (r'(?:mcp)\s+(?:stdio|server)\s+(?:config|configuration)\s*.*(?:hijack|poison|tamper|modify|overwrite)',
+     "MCP STDIO configuration hijacking attack class"),
+]
+
+CONFIG_POISONING_PATTERNS = [
+    (r'(?:codex\s+cli|openai\s+codex)\s*.*(?:arbitrary\s+code|rce|code\s+exec|malicious\s+\.env|config\.toml)',
+     "CVE-2025-61260: OpenAI Codex CLI config poisoning RCE"),
+    (r'CVE.2025.61260',
+     "CVE-2025-61260: OpenAI Codex CLI config poisoning signature"),
+    (r'(?:malicious|attacker|crafted)\s+(?:\.env|config\.toml|\.codex)\s*.*(?:auto.?load|auto.?import|exec|rce|arbitrary)',
+     "Config file auto-loading RCE: malicious .env / config.toml loaded from repo"),
+    (r'(?:\.env|config\.toml|\.codex/config)\s+(?:file|files)\s*.*(?:loaded\s+auto|automatically\s+load|exec|arbitrary|rce)',
+     "Repository config file auto-loading enables code execution"),
+    (r'(?:clone|checkout|pull)\s*.*(?:repo|repository)\s*.*(?:\.env|config\.toml)\s*.*(?:exec|rce|arbitrary|malicious)',
+     "Malicious repo config files trigger code execution on clone"),
+]
+
+MCP_SERVICE_VULN_PATTERNS = [
+    (r'(?:mcp.?server.?kubernetes|mcp.*kubectl)\s*.*(?:arg\w*\s+inject|command\s+inject|unsafe\s+command)',
+     "CVE-2026-39884: mcp-server-kubernetes argument injection via kubectl"),
+    (r'CVE.2026.39884',
+     "CVE-2026-39884: mcp-server-kubernetes argument injection signature"),
+    (r'(?:skywalking|sky.?walking)\s*.*(?:mcp|sw.?url)\s*.*(?:ssrf|server.?side\s+request)',
+     "CVE-2026-34476: Apache SkyWalking MCP SSRF via SW-URL header"),
+    (r'CVE.2026.34476',
+     "CVE-2026-34476: SkyWalking MCP SSRF signature"),
+    (r'(?:splunk)\s*.*(?:mcp|mcp_tool)\s*.*(?:token|session|auth\w*)\s*.*(?:clear\s+text|expos|leak|plain)',
+     "CVE-2026-20205: Splunk MCP Server token exposure in clear text"),
+    (r'CVE.2026.20205',
+     "CVE-2026-20205: Splunk MCP token exposure signature"),
+    (r'(?:tolgee)\s*.*(?:translation|file\s+upload)\s*.*(?:/etc/passwd|arbitrary\s+file|path\s+travers|file\s+read)',
+     "CVE-2026-32251: Tolgee arbitrary file read via translation upload"),
+    (r'CVE.2026.32251',
+     "CVE-2026-32251: Tolgee file read signature"),
+]
+
 KERNEL_DRIVER_PATTERNS = [
     (r'(?:freebsd|bsd)\s*.*(?:kernel|remote)\s*.*(?:rce|root\s+shell|code\s+exec|exploit)',
      "CVE-2026-4747: FreeBSD remote kernel RCE (root shell)"),
@@ -748,6 +816,9 @@ OPENHANDS_INJECTION_PATTERNS = _compile_patterns(OPENHANDS_INJECTION_PATTERNS)
 MULTIMODAL_IMAGE_PATTERNS = _compile_patterns(MULTIMODAL_IMAGE_PATTERNS)
 MULTIMODAL_AUDIO_PATTERNS = _compile_patterns(MULTIMODAL_AUDIO_PATTERNS)
 MCP_EXPOSURE_PATTERNS = _compile_patterns(MCP_EXPOSURE_PATTERNS)
+MCP_STDIO_HIJACK_PATTERNS = _compile_patterns(MCP_STDIO_HIJACK_PATTERNS)
+CONFIG_POISONING_PATTERNS = _compile_patterns(CONFIG_POISONING_PATTERNS)
+MCP_SERVICE_VULN_PATTERNS = _compile_patterns(MCP_SERVICE_VULN_PATTERNS)
 KERNEL_DRIVER_PATTERNS = _compile_patterns(KERNEL_DRIVER_PATTERNS)
 PLUGIN_TRUST_PATTERNS = _compile_patterns(PLUGIN_TRUST_PATTERNS)
 PAIRING_AUTH_PATTERNS = _compile_patterns(PAIRING_AUTH_PATTERNS)
@@ -806,6 +877,9 @@ class ToolParser:
         self._multimodal_image_detections = 0
         self._multimodal_audio_detections = 0
         self._mcp_exposure_detections = 0
+        self._mcp_stdio_hijack_detections = 0
+        self._config_poisoning_detections = 0
+        self._mcp_service_vuln_detections = 0
         self._kernel_driver_detections = 0
         self._plugin_trust_detections = 0
         self._pairing_auth_detections = 0
@@ -1058,6 +1132,39 @@ class ToolParser:
                         reason=f"OWASP Agentic: {owasp_hit}",
                         threat_type="agent_exploitation",
                         confidence=0.91
+                    ))
+
+        mcp_stdio_hit = self._detect_mcp_stdio_hijack(raw_result)
+        if mcp_stdio_hit:
+            self._mcp_stdio_hijack_detections += 1
+            return (f"[Lionguard] MCP STDIO config hijack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"MCP STDIO hijack: {mcp_stdio_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.95
+                    ))
+
+        config_poison_hit = self._detect_config_poisoning(raw_result)
+        if config_poison_hit:
+            self._config_poisoning_detections += 1
+            return (f"[Lionguard] Config file poisoning stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Config poisoning: {config_poison_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        mcp_svc_hit = self._detect_mcp_service_vuln(raw_result)
+        if mcp_svc_hit:
+            self._mcp_service_vuln_detections += 1
+            return (f"[Lionguard] MCP service vulnerability stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"MCP service vuln: {mcp_svc_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.92
                     ))
 
         agent_plat_hit = self._detect_agent_platform(raw_result)
@@ -1371,6 +1478,33 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_mcp_stdio_hijack(self, text: str) -> Optional[str]:
+        """Detect MCP STDIO configuration hijacking attacks where attackers
+        modify local MCP config to register malicious STDIO servers.
+        CVE-2026-30615 (Windsurf), CVE-2026-30624 (Agent Zero),
+        CVE-2026-30616 (Jaaz), CVE-2026-30617 (LangChain-ChatChat)."""
+        for pattern, description in MCP_STDIO_HIJACK_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_config_poisoning(self, text: str) -> Optional[str]:
+        """CVE-2025-61260: Detect config file auto-loading RCE where malicious
+        .env or .codex/config.toml files in cloned repos trigger code execution."""
+        for pattern, description in CONFIG_POISONING_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mcp_service_vuln(self, text: str) -> Optional[str]:
+        """Detect vulnerabilities in specific MCP service implementations:
+        kubernetes arg injection, SkyWalking SSRF, Splunk token exposure,
+        Tolgee file read."""
+        for pattern, description in MCP_SERVICE_VULN_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_agent_platform(self, text: str) -> Optional[str]:
         """CVE-2026-39981/40088/40160: Detect vulnerabilities in AI agent
         platforms (AGiXT, PraisonAI) including path traversal, command
@@ -1503,6 +1637,9 @@ class ToolParser:
             "multimodal_image_detections": self._multimodal_image_detections,
             "multimodal_audio_detections": self._multimodal_audio_detections,
             "mcp_exposure_detections": self._mcp_exposure_detections,
+            "mcp_stdio_hijack_detections": self._mcp_stdio_hijack_detections,
+            "config_poisoning_detections": self._config_poisoning_detections,
+            "mcp_service_vuln_detections": self._mcp_service_vuln_detections,
             "kernel_driver_detections": self._kernel_driver_detections,
             "plugin_trust_detections": self._plugin_trust_detections,
             "pairing_auth_detections": self._pairing_auth_detections,

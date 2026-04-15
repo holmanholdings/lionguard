@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**37+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub defense. Local-first. Zero API cost. MIT licensed.**
+**45+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -129,6 +129,15 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | LangChain / Apollo MCP / FastGPT batch | Template injection, DNS rebinding, unauthenticated SSRF, cross-tenant exposure | ✅ |
 | FFmpeg mov.c recursive observation | Detects recursive/anomalous media container structures before processing | ✅ |
 | MaxKB stored XSS / incomplete RCE | Catches incomplete RCE fix + stored XSS in MaxKB AI assistant (CVE-2026-39417/39426) | ✅ |
+| MCP STDIO config hijacking | Detects malicious STDIO server registration via config modification (CVE-2026-30615/30624/30616/30617) | ✅ |
+| Windsurf prompt injection RCE | Blocks prompt injection via malicious MCP STDIO server in Windsurf (CVE-2026-30615) | ✅ |
+| Agent Zero external MCP RCE | Detects RCE via external MCP server config in Agent Zero (CVE-2026-30624) | ✅ |
+| LangChain-ChatChat MCP STDIO RCE | Blocks attacker-controlled MCP STDIO server exploitation (CVE-2026-30617) | ✅ |
+| OpenAI Codex CLI config poisoning | Detects malicious .env / .codex/config.toml auto-loading RCE (CVE-2025-61260) | ✅ |
+| mcp-server-kubernetes arg injection | Blocks kubectl argument injection via MCP server (CVE-2026-39884) | ✅ |
+| Apache SkyWalking MCP SSRF | Detects server-side request forgery via SW-URL header (CVE-2026-34476) | ✅ |
+| Splunk MCP token exposure | Catches clear-text auth token leaks in Splunk MCP Server (CVE-2026-20205) | ✅ |
+| Tolgee arbitrary file read | Blocks path traversal via translation file upload (CVE-2026-32251) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -293,17 +302,20 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.16.0 (2026-04-14)
+## Latest Update: v0.17.0 (2026-04-15)
 
-PraisonAI YAML workflow RCE defense + WebSocket session hijack + tools.py auto-import RCE. MCPHub authentication bypass detection. 37/37 criticals covered. 5 live payloads blocked by existing defenses.
+MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config poisoning + MCP service vulnerability batch. Largest Prowl sweep ever (104 findings). 12 live payloads blocked by existing defenses. 45/45 criticals covered.
 
-- **PraisonAI YAML Workflow RCE (GHSA-vc46-vw85-3wvm)** — Detects malicious `type: job` entries in workflow YAML files that enable arbitrary code execution.
-- **PraisonAI WebSocket Session Hijack (GHSA-8x8f-54wf-vv92)** — Blocks unauthenticated WebSocket clients from hijacking connected browser extension sessions.
-- **PraisonAI tools.py Auto-Import RCE (GHSA-g985-wjh9-qxxc)** — Catches automatic import of attacker-controlled tools.py modules that enable code execution.
-- **MCPHub Authentication Bypass (CVE-2025-13822)** — Detects authentication bypass on unprotected MCPHub endpoints allowing user impersonation and privilege escalation.
+- **MCP STDIO Config Hijacking (CVE-2026-30615/30624/30616/30617)** — New attack class: detects malicious STDIO server registration via local MCP config modification. Covers Windsurf, Agent Zero, Jaaz, and LangChain-ChatChat.
+- **OpenAI Codex CLI Config Poisoning (CVE-2025-61260)** — Blocks malicious .env and .codex/config.toml files auto-loaded from cloned repos that enable arbitrary code execution.
+- **mcp-server-kubernetes Arg Injection (CVE-2026-39884)** — Detects kubectl argument injection via MCP server.
+- **Apache SkyWalking MCP SSRF (CVE-2026-34476)** — Catches server-side request forgery via SW-URL header.
+- **Splunk MCP Token Exposure (CVE-2026-20205)** — Blocks clear-text auth token leaks in Splunk MCP Server.
+- **Tolgee Arbitrary File Read (CVE-2026-32251)** — Detects path traversal via translation file upload.
 
 ### Previous Versions
 
+- **v0.16.0 (2026-04-14)** — PraisonAI YAML workflow RCE (GHSA-vc46), WebSocket session hijack (GHSA-8x8f), tools.py auto-import RCE (GHSA-g985), MCPHub auth bypass (CVE-2025-13822).
 - **v0.15.1 (2026-04-14)** — FFmpeg mov.c recursive observation defense (new vuln class), MaxKB stored XSS + incomplete RCE (CVE-2026-39417/39426).
 - **v0.15.0 (2026-04-13)** — AGiXT path traversal (CVE-2026-39981), PraisonAI cmd injection/SSRF (CVE-2026-40088/40160), OpenClaw Canvas auth bypass (CVE-2026-3690/3689), Ring-0 escalation (CVE-2025-8061), LangChain/Apollo MCP/FastGPT batch.
 - **v0.14.0 (2026-04-08)** — OpenClaw pairing bypass (CVE-2026-33579), Cisco IMC auth bypass (CVSS 9.8), OWASP Agentic Top 10, FastMCP/Claude CLI/LiteLLM/MCP SDK/CUPS batch.
@@ -322,7 +334,7 @@ PraisonAI YAML workflow RCE defense + WebSocket session hijack + tools.py auto-i
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.16.0 — now including PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.17.0 — now including MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -330,7 +342,7 @@ Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidi
 | **Poison** | Inject malicious inputs via direct/indirect prompt injection, RAG poisoning, encoded payloads, env-var RCE, CI/CD poisoning, steganographic/typographic image injection, WhisperInject audio attacks | AML.T0051.001 Direct Injection, AML.T0051.002 Indirect Injection, AML.T0043 Adversarial Data | **Sentinel** catches injection (LLM + regex fast-path). **Pre-processor** strips zero-width chars, homoglyphs, base64. **Link Preview Parser** strips OG/Twitter metadata injection. **EnvVar Sanitizer** blocks NODE_OPTIONS/LD_PRELOAD/DYLD_* RCE (CVE-2026-22177). **RAG Poisoning Detector** catches knowledge-base contamination. **GitHub Workflow Scanner** detects CI/CD poisoning via pull_request_target (CVE-2026-33075). **Image Preprocessor** kills steganographic/typographic payloads via JPEG recompression + Gaussian blur. **Audio Analyzer** detects ultrasonic/subsonic injection and recommends lossy transcoding. | Covered |
 | **Hijack** | Compromise runtime behavior -- exfiltrate data, force tool calls, mid-task content injection, argument smuggling, wrapper persistence, tool hijacking, memory poisoning | AML.T0054 LLM Jailbreak, AML.T0056 Data Leakage | **Tool Parser** validates all tool results. **Content Sentinel** scans ingested content before LLM processes it (Poison-to-Hijack). **OWASP Agentic Detector** catches tool hijacking, memory/context poisoning, agent goal override, multi-agent chain exploitation. **SSRF Block** prevents internal network access. **Privilege Escalation Detector** catches leaked auth tokens/JWTs. **Privilege Engine** enforces least-privilege. **Wrapper-Persistence Scanner** detects allow-always payload swaps (CVE-2026-29607). **CVE Batch Rules** catch argument smuggling, allowlist bypass, regex injection, command substitution. | Covered |
 | **Persist** | Maintain access via cross-session memory poisoning, shared resource contamination, path traversal, sandbox escape, sandbox inheritance bypass | AML.T0043.002 Data Perturbation, AML.T0096 AI Service API | **Propagation Tracker** detects threats surfacing across agent sessions. **State Verification Hook** catches false completion reports. **Supply-Chain Persona Detection** blocks identity override persistence. **Path Traversal Rules** block directory escape (CVE-22171/22180). **Sandbox Escape Detector** blocks symlink traversal (CVE-2026-31990). **Sandbox Inheritance Enforcement** ensures spawned sessions inherit confinement (CVE-2026-32048). | Covered |
-| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec, sandbox config exploitation, kernel RCE, driver bypass, infrastructure auth bypass, Ring-0 escalation | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution (CVE-2026-33017/33053/33060). **Agent Platform Detector** catches AGiXT path traversal, PraisonAI command injection/SSRF/YAML RCE/WebSocket hijack/auto-import RCE (CVE-2026-39981/40088/40160, GHSA-vc46/8x8f/g985). **MCPHub Auth Bypass Detector** catches unprotected endpoint impersonation + privilege escalation (CVE-2025-13822). **Canvas Auth Detector** blocks OpenClaw Canvas authentication bypass and path traversal (CVE-2026-3690/3689). **Ring-0 Escalation Detector** catches user-land to kernel-mode privilege escalation (CVE-2025-8061). **Sandbox Config Validator** catches improper sandbox config leading to arbitrary exec (CVE-2026-32046). **MCP Exposure Detector** blocks unauthenticated MCP endpoints and API key decryption vectors (CVE-2026-33032). **Kernel/Driver Detector** catches FreeBSD kernel RCE and BYOVD attacks (CVE-2026-4747, VEN0m). **Plugin Trust Detector** blocks untrusted plugin loading (CVE-2026-32920). **Infra Auth Bypass Detector** catches Cisco IMC and management controller pre-auth bypass (CVSS 9.8). **Pairing Auth Detector** blocks unauthorized pairing approval (CVE-2026-33579). | Covered |
+| **Impact** | Execute final objectives -- send unauthorized comms, exfiltrate credentials, platform-level arbitrary code exec, sandbox config exploitation, kernel RCE, driver bypass, infrastructure auth bypass, Ring-0 escalation, MCP config hijacking | AML.T0056 Data Leakage, AML.T0048.004 Denial of Service | **Output Scanner** blocks credential/secret leaks in responses. **Circuit Breaker** auto-shuts agent on anomaly threshold. **Privilege Engine** DENYs destructive tools. **Platform Exec Detector** catches unauth code execution (CVE-2026-33017/33053/33060). **Agent Platform Detector** catches AGiXT path traversal, PraisonAI command injection/SSRF/YAML RCE/WebSocket hijack/auto-import RCE (CVE-2026-39981/40088/40160, GHSA-vc46/8x8f/g985). **MCPHub Auth Bypass Detector** catches unprotected endpoint impersonation + privilege escalation (CVE-2025-13822). **Canvas Auth Detector** blocks OpenClaw Canvas authentication bypass and path traversal (CVE-2026-3690/3689). **Ring-0 Escalation Detector** catches user-land to kernel-mode privilege escalation (CVE-2025-8061). **Sandbox Config Validator** catches improper sandbox config leading to arbitrary exec (CVE-2026-32046). **MCP Exposure Detector** blocks unauthenticated MCP endpoints and API key decryption vectors (CVE-2026-33032). **MCP STDIO Hijack Detector** catches malicious STDIO server registration via config modification (CVE-2026-30615/30624/30616/30617). **Config Poisoning Detector** blocks malicious .env/config.toml auto-loading RCE (CVE-2025-61260). **MCP Service Vuln Detector** catches kubernetes arg injection, SkyWalking SSRF, Splunk token exposure, Tolgee file read (CVE-2026-39884/34476/20205/32251). **Kernel/Driver Detector** catches FreeBSD kernel RCE and BYOVD attacks (CVE-2026-4747, VEN0m). **Plugin Trust Detector** blocks untrusted plugin loading (CVE-2026-32920). **Infra Auth Bypass Detector** catches Cisco IMC and management controller pre-auth bypass (CVSS 9.8). **Pairing Auth Detector** blocks unauthorized pairing approval (CVE-2026-33579). | Covered |
 | **Iterate/Pivot** | Establish C2, rewrite agent goals, pivot laterally to other users/workflows | AML.T0096 AI Service API (C2) | **Propagation Tracker** escalates cross-agent spread to P0 and quarantines all affected agents. **Circuit Breaker** sliding-window rate limiter stops attack loops. **Vulnerability Scanner** flags known-vuln packages before installation. | Covered |
 
 > **Reference:** CVE-2026-25253 (OpenClaw WebSocket hijack) is the canonical example of a Recon-to-Impact chain. Lionguard's Sentinel + Tool Parser + Circuit Breaker would have broken this chain at three separate stages.
@@ -389,6 +401,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.17.0** | 2026-04-15 | MCP STDIO config hijacking (CVE-2026-30615/30624/30616/30617), OpenAI Codex CLI config poisoning (CVE-2025-61260), MCP service batch (kubernetes/SkyWalking/Splunk/Tolgee). 45/45 criticals. 12 live payloads blocked. |
 | **v0.16.0** | 2026-04-14 | PraisonAI YAML workflow RCE (GHSA-vc46), WebSocket hijack (GHSA-8x8f), tools.py auto-import RCE (GHSA-g985), MCPHub auth bypass (CVE-2025-13822). 37/37 criticals. 5 live payloads blocked. |
 | **v0.15.1** | 2026-04-14 | FFmpeg mov.c recursive observation defense (new vuln class), MaxKB stored XSS + incomplete RCE (CVE-2026-39417/39426) |
 | **v0.15.0** | 2026-04-13 | AGiXT path traversal (CVE-2026-39981), PraisonAI cmd injection/SSRF (CVE-2026-40088/40160), OpenClaw Canvas auth bypass (CVE-2026-3690/3689), Ring-0 escalation (CVE-2025-8061), LangChain/Apollo MCP/FastGPT/ANSI escape batch |
