@@ -145,6 +145,19 @@ v0.18.0 patches (from Prowl 2026-04-18 -- 76 findings, 9 live payloads blocked):
   in langchain-core prompt loading allows arbitrary file reads
 - ClawHavoc IOC: noreplyboter/polymarket-all-in-one malicious skill with
   curl-based reverse shell backdoor
+
+v0.19.0 patches (from Prowl 2026-04-19 -- 71 findings, validation-heavy day,
+3 live payloads blocked, all v0.18.0 patterns confirmed catching new notables):
+- Slopsquatting (new attack class): AI hallucinates a package name, attacker
+  registers it on PyPI/npm, and an agent that auto-runs the LLM-suggested
+  pip install is compromised. Compound chain with hardcoded credentials in
+  AI-generated code (the "Vibe Coding" attack chain).
+- Denial-of-Wallet (new attack class): adversarial prompts crafted to drain
+  cloud/LLM budgets via unbounded token consumption, evading traditional
+  rate limiting. Cost amplification / economic denial of service.
+- Infrastructure CVE expansion: CVE-2026-22666 (Dolibarr dol_eval()
+  whitelist bypass via PHP dynamic callable syntax), CVE-2026-34980 +
+  CVE-2026-34990 (CUPS remote unauth RCE-to-root chain in print spooler).
 """
 
 import re
@@ -579,6 +592,22 @@ INFRASTRUCTURE_CVE_PATTERNS = [
      "CVE-2026-34197: Apache ActiveMQ code injection signature"),
     (r'(?:cisa\s+kev|kev.listed|known\s+exploited)\s*.*(?:activemq|haproxy|apache)',
      "CISA KEV active exploitation alert (infrastructure)"),
+    (r'(?:dolibarr)\s*.*(?:dol_eval|dol\s*eval)\s*.*(?:whitelist\s+bypass|forbidden\s+string|rce)',
+     "CVE-2026-22666: Dolibarr dol_eval() whitelist bypass enabling RCE"),
+    (r'CVE.2026.22666',
+     "CVE-2026-22666: Dolibarr dol_eval whitelist bypass signature"),
+    (r'(?:dol_eval)\s*.*(?:bypass|inject|rce|callable\s+syntax|php\s+dynamic)',
+     "Dolibarr dol_eval() injection vector (whitelist bypass)"),
+    (r'(?:php\s+dynamic\s+callable\s+syntax)\s*.*(?:bypass|miss|regex|whitelist)',
+     "PHP dynamic callable syntax bypassing input validation regex"),
+    (r'(?:cups)\s*.*(?:remote|unauth\w*)\s*.*(?:rce|root|escal\w+)\s*.*(?:chain|spool|print)',
+     "CVE-2026-34980 / CVE-2026-34990: CUPS remote unauth RCE-to-root chain"),
+    (r'CVE.2026.34980',
+     "CVE-2026-34980: CUPS remote unauth RCE signature"),
+    (r'CVE.2026.34990',
+     "CVE-2026-34990: CUPS root privilege escalation signature"),
+    (r'(?:cups)\s+(?:printing|spool\w+)\s*.*(?:exploit|rce|takeover)',
+     "CUPS printing system exploitation chain"),
 ]
 
 LANGCHAIN_PROMPT_PATTERNS = [
@@ -588,6 +617,42 @@ LANGCHAIN_PROMPT_PATTERNS = [
      "langchain-core symlink file read vulnerability"),
     (r'(?:prompt\s+loader)\s+(?:symlink|relative\s+path)\s*.*(?:read|travers|escape)',
      "Prompt Loader symlink traversal for file read"),
+]
+
+SLOPSQUATTING_PATTERNS = [
+    (r'(?:slopsquat\w*)',
+     "Slopsquatting reference: hallucinated package name registered by attacker"),
+    (r'(?:hallucinat\w+)\s+(?:package|library|module|dependency)\s+(?:name|registered|exists)',
+     "AI-hallucinated package name potentially registered by attacker"),
+    (r'(?:llm|ai|chatbot|copilot|cursor|claude\s+code)\s*.*(?:suggest\w*|recommend\w*|generat\w*)\s*.*(?:non.?existent|fake|hallucinat\w+)\s+(?:package|module|pip)',
+     "AI-generated code referencing non-existent or hallucinated packages"),
+    (r'pip\s+install\s+\S+\s*.*(?:typosquat|slopsquat|impersonat\w+|lookalike|homoglyph)',
+     "pip install of typo/slop-squatted package"),
+    (r'(?:typosquat\w*|typo.?squat)\s+(?:pypi|npm|package|registry|library)',
+     "Typosquatted package registry attack"),
+    (r'(?:malicious|backdoor\w*|rogue)\s+(?:pypi|npm)\s+package\s*.*(?:install\w*|publish\w*)',
+     "Malicious package registry publication"),
+    (r'(?:vibe\s+coding)\s*.*(?:slopsquat\w*|hardcoded\s+key|broken\s+auth)\s*.*(?:pip\s+install|attack\s+chain)',
+     "Vibe coding attack chain: slopsquatting + hardcoded keys + pip install"),
+    (r'(?:agent|llm|copilot)\s+(?:executes?|run\w+|install\w+)\s+pip\s+install\s+\S+\s*.*(?:from\s+(?:generated|suggested))',
+     "Agent auto-running pip install of LLM-suggested package"),
+]
+
+DENIAL_OF_WALLET_PATTERNS = [
+    (r'(?:denial.of.wallet|denial\s+of\s+wallet)',
+     "Denial-of-wallet attack: token/cost exhaustion DoS"),
+    (r'(?:unbounded|unbound|unlimited|infinite)\s+(?:llm\s+)?token\s+(?:consumption|usage|generation)',
+     "Unbounded token consumption attack vector"),
+    (r'(?:exhaust|drain|inflat\w+|burn)\s+(?:cloud\s+)?(?:budget|spend|cost|api\s+credit|llm\s+credit)',
+     "Cloud/API budget exhaustion attack"),
+    (r'(?:token\s+(?:flood|bomb|exhaustion))\s*.*(?:llm|ai|api|model)',
+     "Token flood/bomb DoS against LLM API"),
+    (r'(?:evad\w+|bypass)\s+(?:traditional\s+)?rate\s+limit\w*\s*.*(?:token|llm|cost)',
+     "Rate-limit evasion via token-cost amplification"),
+    (r'(?:cost\s+amplificat\w+|bill\s+inflat\w+|economic\s+(?:dos|denial))',
+     "Cost amplification / economic denial of service"),
+    (r'(?:prompt|input)\s+(?:designed|crafted)\s+to\s+(?:maximize|inflate)\s+(?:token|output|response)\s+(?:length|count|consumption)',
+     "Prompt crafted to maximize token consumption (denial-of-wallet)"),
 ]
 
 CLAWHAVOC_IOC_PATTERNS = [
@@ -916,6 +981,8 @@ MCP_SERVICE_VULN_PATTERNS = _compile_patterns(MCP_SERVICE_VULN_PATTERNS)
 AI_PLATFORM_INJECTION_PATTERNS = _compile_patterns(AI_PLATFORM_INJECTION_PATTERNS)
 INFRASTRUCTURE_CVE_PATTERNS = _compile_patterns(INFRASTRUCTURE_CVE_PATTERNS)
 LANGCHAIN_PROMPT_PATTERNS = _compile_patterns(LANGCHAIN_PROMPT_PATTERNS)
+SLOPSQUATTING_PATTERNS = _compile_patterns(SLOPSQUATTING_PATTERNS)
+DENIAL_OF_WALLET_PATTERNS = _compile_patterns(DENIAL_OF_WALLET_PATTERNS)
 CLAWHAVOC_IOC_PATTERNS = _compile_patterns(CLAWHAVOC_IOC_PATTERNS)
 KERNEL_DRIVER_PATTERNS = _compile_patterns(KERNEL_DRIVER_PATTERNS)
 PLUGIN_TRUST_PATTERNS = _compile_patterns(PLUGIN_TRUST_PATTERNS)
@@ -982,6 +1049,8 @@ class ToolParser:
         self._infrastructure_cve_detections = 0
         self._langchain_prompt_detections = 0
         self._clawhavoc_ioc_detections = 0
+        self._slopsquatting_detections = 0
+        self._denial_of_wallet_detections = 0
         self._kernel_driver_detections = 0
         self._plugin_trust_detections = 0
         self._pairing_auth_detections = 0
@@ -1311,6 +1380,28 @@ class ToolParser:
                         reason=f"ClawHavoc IOC: {clawhavoc_hit}",
                         threat_type="malicious_skill",
                         confidence=0.96
+                    ))
+
+        slopsquat_hit = self._detect_slopsquatting(raw_result)
+        if slopsquat_hit:
+            self._slopsquatting_detections += 1
+            return (f"[Lionguard] Slopsquatting pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Slopsquatting: {slopsquat_hit}",
+                        threat_type="supply_chain",
+                        confidence=0.92
+                    ))
+
+        dow_hit = self._detect_denial_of_wallet(raw_result)
+        if dow_hit:
+            self._denial_of_wallet_detections += 1
+            return (f"[Lionguard] Denial-of-wallet pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Denial-of-wallet: {dow_hit}",
+                        threat_type="resource_exhaustion",
+                        confidence=0.91
                     ))
 
         agent_plat_hit = self._detect_agent_platform(raw_result)
@@ -1691,6 +1782,27 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_slopsquatting(self, text: str) -> Optional[str]:
+        """Detect slopsquatting attack vectors: AI-hallucinated package
+        names that attackers register on PyPI/npm so an agent that
+        auto-runs LLM-suggested pip installs gets compromised. Includes
+        the broader Vibe Coding attack chain (slopsquatting + hardcoded
+        keys + broken auth via pip install)."""
+        for pattern, description in SLOPSQUATTING_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_denial_of_wallet(self, text: str) -> Optional[str]:
+        """Detect denial-of-wallet attacks: adversarial prompts crafted
+        to drain cloud/LLM budgets via unbounded token consumption,
+        evading traditional rate limiting (cost amplification / economic
+        denial of service)."""
+        for pattern, description in DENIAL_OF_WALLET_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_agent_platform(self, text: str) -> Optional[str]:
         """CVE-2026-39981/40088/40160: Detect vulnerabilities in AI agent
         platforms (AGiXT, PraisonAI) including path traversal, command
@@ -1830,6 +1942,8 @@ class ToolParser:
             "infrastructure_cve_detections": self._infrastructure_cve_detections,
             "langchain_prompt_detections": self._langchain_prompt_detections,
             "clawhavoc_ioc_detections": self._clawhavoc_ioc_detections,
+            "slopsquatting_detections": self._slopsquatting_detections,
+            "denial_of_wallet_detections": self._denial_of_wallet_detections,
             "kernel_driver_detections": self._kernel_driver_detections,
             "plugin_trust_detections": self._plugin_trust_detections,
             "pairing_auth_detections": self._pairing_auth_detections,

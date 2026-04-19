@@ -1121,6 +1121,44 @@ for payload, expected, label in v18_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.19.0: Slopsquatting + Denial-of-Wallet + Dolibarr + CUPS
+print(f"\n--- Slopsquatting + Denial-of-Wallet + Dolibarr + CUPS (v0.19.0) ---")
+v19_tests = [
+    ("Dolibarr 23.0.0 dol_eval whitelist bypass enables RCE via PHP dynamic callable syntax", "block", "CVE-2026-22666: Dolibarr dol_eval"),
+    ("CVE-2026-22666 Dolibarr dol_eval whitelist bypass", "block", "CVE-2026-22666: signature"),
+    ("dol_eval forbidden strings ignored enabling injection rce", "block", "dol_eval injection vector"),
+    ("PHP dynamic callable syntax bypasses regex whitelist", "block", "PHP dynamic callable bypass"),
+    ("CUPS remote unauthenticated RCE-to-root chain via spool printing", "block", "CVE-2026-34980/34990 CUPS"),
+    ("CVE-2026-34980 CUPS remote unauth RCE", "block", "CVE-2026-34980: signature"),
+    ("CVE-2026-34990 CUPS root privilege escalation", "block", "CVE-2026-34990: signature"),
+    ("CUPS printing spooler exploit chain enables takeover", "block", "CUPS exploit chain"),
+    ("Slopsquatting attack on PyPI registers hallucinated package names", "block", "Slopsquatting class"),
+    ("AI hallucinated package name registered by attacker on registry exists", "block", "Hallucinated package"),
+    ("Cursor suggested non-existent package now hallucinated and registered", "block", "AI hallucinated dependency"),
+    ("pip install requests-fast typosquat impersonates real library", "block", "Typosquat pip install"),
+    ("Typosquatted PyPI package registry attack on lookalike", "block", "PyPI typosquat"),
+    ("Malicious PyPI package install backdoors environment", "block", "Malicious package publication"),
+    ("Vibe coding slopsquatting hardcoded keys broken auth pip install attack chain", "block", "Vibe coding chain"),
+    ("Agent executes pip install of LLM-suggested package from generated code", "block", "Agent pip install LLM-suggested"),
+    ("Denial-of-wallet attack drains cloud LLM budget via token consumption", "block", "Denial-of-wallet class"),
+    ("Unbounded LLM token consumption attack vector", "block", "Unbounded token consumption"),
+    ("Adversarial prompt designed to drain cloud budget and exhaust API credits", "block", "Cloud budget exhaustion"),
+    ("Token flood DoS against LLM API drains credits", "block", "Token flood DoS"),
+    ("Bypass traditional rate limiting via token cost amplification", "block", "Rate-limit evasion via tokens"),
+    ("Economic denial of service via cost amplification attack", "block", "Economic DoS"),
+    ("Prompt crafted to maximize token consumption denial-of-wallet", "block", "Maximize token consumption"),
+    ("Standard pip install requests==2.31.0 in agent setup script.", "pass", "False positive check"),
+]
+for payload, expected, label in v19_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

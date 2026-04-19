@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**50+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage. Local-first. Zero API cost. MIT licensed.**
+**55+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -148,6 +148,11 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Apache ActiveMQ code injection | Blocks improper input validation RCE (CVE-2026-34197 -- CISA KEV) | ✅ |
 | LangChain Prompt Loader symlink read | Blocks symlink-based arbitrary file reads in prompt loading | ✅ |
 | ClawHavoc malicious skill IOC | Blocks `noreplyboter/polymarket-all-in-one` reverse shell skill | ✅ |
+| Slopsquatting / hallucinated packages | Blocks AI-suggested install of hallucinated/typosquatted PyPI/npm packages | ✅ |
+| Vibe Coding compound attack chain | Catches slopsquatting + hardcoded creds + broken auth via pip install | ✅ |
+| Denial-of-wallet attacks | Blocks token-cost-amplification DoS evading rate limits | ✅ |
+| Dolibarr `dol_eval()` whitelist bypass | Blocks PHP dynamic callable syntax RCE (CVE-2026-22666) | ✅ |
+| CUPS print spooler RCE-to-root | Blocks remote unauth RCE chain (CVE-2026-34980 + CVE-2026-34990) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -312,7 +317,17 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.18.0 (2026-04-18)
+## Latest Update: v0.19.0 (2026-04-19)
+
+**Two new attack classes** + infrastructure CVE expansion. Quiet validation day -- 71 findings, 3 live payloads blocked, and **every single new notable from today was already caught by v0.18.0 patterns shipped yesterday** (FastGPT NoSQL, PraisonAI SQLi, mcp-neo4j APOC, AAP MCP, HAProxy, LangChain symlink, ClawHavoc -- all hitting our existing claws). 55/55 criticals covered.
+
+**New in v0.19.0:**
+- **Slopsquatting** (new attack class) -- AI hallucinates a package name, attackers register the hallucinated name on PyPI/npm, and any agent that auto-runs LLM-suggested `pip install` commands gets compromised. Includes the broader "Vibe Coding" compound attack chain (slopsquatting + hardcoded credentials + broken auth via pip install).
+- **Denial-of-Wallet** (new attack class) -- adversarial prompts crafted to drain cloud/LLM budgets via unbounded token consumption, evading traditional rate limiting. Cost amplification / economic denial of service.
+- **Dolibarr `dol_eval()` whitelist bypass** (CVE-2026-22666) -- forbidden strings ignored in default mode and regex misses PHP dynamic callable syntax (RCE).
+- **CUPS print spooler RCE-to-root chain** (CVE-2026-34980 + CVE-2026-34990) -- remote unauthenticated RCE escalating to root in the CUPS printing system.
+
+## Previous: v0.18.0 (2026-04-18)
 
 AI agent platform SQL/NoSQL injection (new attack class) + MCP service vuln expansion + infrastructure CVE coverage + LangChain Prompt Loader symlink read + ClawHavoc IOC. 76 findings, **9 live payloads blocked by existing defenses** (FastGPT NoSQL login bypass, OpenHands command injection, ClawHavoc-style social engineering, Tolgee file read, multimodal injection ruse, and more). 50/50 criticals covered.
 
@@ -359,7 +374,7 @@ MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config p
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.18.0 — now including AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.19.0 — now including slopsquatting (AI-hallucinated package registration on PyPI/npm), denial-of-wallet (token-cost-amplification DoS evading rate limiting), Dolibarr `dol_eval()` whitelist bypass, CUPS RCE-to-root chain, AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -426,6 +441,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.19.0** | 2026-04-19 | Two new attack classes -- slopsquatting (AI-hallucinated package registration + Vibe Coding compound chain) and denial-of-wallet (token-cost-amplification DoS). Infra CVE expansion: CVE-2026-22666 (Dolibarr dol_eval whitelist bypass via PHP dynamic callable syntax), CVE-2026-34980 + CVE-2026-34990 (CUPS unauth RCE-to-root chain). 55/55 criticals. 3 live payloads blocked. Validation day: every new notable already covered by v0.18.0. |
 | **v0.18.0** | 2026-04-18 | AI platform SQL/NoSQL injection (CVE-2026-40351/40352 FastGPT, CVE-2026-40315 / GHSA-rg3h PraisonAI), MCP service expansion (CVE-2026-35402 mcp-neo4j-cypher APOC, CVE-2026-6494 AAP MCP, CVE-2026-39313 mcp-framework DoS), infra CVEs (CVE-2026-33555 HAProxy QUIC, CVE-2026-34197 ActiveMQ CISA KEV), LangChain Prompt Loader symlink read, ClawHavoc IOC. 50/50 criticals. 9 live payloads blocked. |
 | **v0.17.0** | 2026-04-15 | MCP STDIO config hijacking (CVE-2026-30615/30624/30616/30617), OpenAI Codex CLI config poisoning (CVE-2025-61260), MCP service batch (kubernetes/SkyWalking/Splunk/Tolgee). 45/45 criticals. 12 live payloads blocked. |
 | **v0.16.0** | 2026-04-14 | PraisonAI YAML workflow RCE (GHSA-vc46), WebSocket hijack (GHSA-8x8f), tools.py auto-import RCE (GHSA-g985), MCPHub auth bypass (CVE-2025-13822). 37/37 criticals. 5 live payloads blocked. |
