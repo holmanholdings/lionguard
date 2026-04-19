@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**45+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning. Local-first. Zero API cost. MIT licensed.**
+**50+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -138,6 +138,16 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Apache SkyWalking MCP SSRF | Detects server-side request forgery via SW-URL header (CVE-2026-34476) | ✅ |
 | Splunk MCP token exposure | Catches clear-text auth token leaks in Splunk MCP Server (CVE-2026-20205) | ✅ |
 | Tolgee arbitrary file read | Blocks path traversal via translation file upload (CVE-2026-32251) | ✅ |
+| FastGPT NoSQL login bypass | Blocks NoSQL injection in password-based login (CVE-2026-40351) | ✅ |
+| FastGPT password change NoSQL injection | Blocks account takeover via NoSQL injection (CVE-2026-40352) | ✅ |
+| PraisonAI conversation store SQL injection | Blocks SQLi via unvalidated `table_prefix` (CVE-2026-40315 / GHSA-rg3h-x3jw-7jm5) | ✅ |
+| mcp-neo4j-cypher APOC bypass | Blocks read-only mode bypass via APOC procedures (CVE-2026-35402) | ✅ |
+| AAP MCP unauthenticated log injection | Blocks log forgery via unsanitized `toolsetroute` (CVE-2026-6494) | ✅ |
+| mcp-framework HTTP transport DoS | Blocks unbounded request body concatenation (CVE-2026-39313) | ✅ |
+| HAProxy HTTP/3 to HTTP/1 desync | Blocks cross-protocol request smuggling via QUIC FIN (CVE-2026-33555) | ✅ |
+| Apache ActiveMQ code injection | Blocks improper input validation RCE (CVE-2026-34197 -- CISA KEV) | ✅ |
+| LangChain Prompt Loader symlink read | Blocks symlink-based arbitrary file reads in prompt loading | ✅ |
+| ClawHavoc malicious skill IOC | Blocks `noreplyboter/polymarket-all-in-one` reverse shell skill | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -302,7 +312,22 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.17.0 (2026-04-15)
+## Latest Update: v0.18.0 (2026-04-18)
+
+AI agent platform SQL/NoSQL injection (new attack class) + MCP service vuln expansion + infrastructure CVE coverage + LangChain Prompt Loader symlink read + ClawHavoc IOC. 76 findings, **9 live payloads blocked by existing defenses** (FastGPT NoSQL login bypass, OpenHands command injection, ClawHavoc-style social engineering, Tolgee file read, multimodal injection ruse, and more). 50/50 criticals covered.
+
+**New in v0.18.0:**
+- **FastGPT NoSQL injection** in password-based login (CVE-2026-40351) and password change endpoint (CVE-2026-40352) -- account takeover including root admin
+- **PraisonAI SQL injection** in 9 conversation store backends via unvalidated `table_prefix` (CVE-2026-40315 / GHSA-rg3h-x3jw-7jm5 -- incomplete fix)
+- **mcp-neo4j-cypher** read-only mode bypass via APOC procedures enabling unauthorized writes/SSRF (CVE-2026-35402)
+- **AAP MCP server** unauthenticated log injection via unsanitized `toolsetroute` parameter (CVE-2026-6494)
+- **mcp-framework** unbounded request body DoS via large POSTs (CVE-2026-39313)
+- **HAProxy** HTTP/3 to HTTP/1 cross-protocol request smuggling via standalone QUIC FIN packets (CVE-2026-33555)
+- **Apache ActiveMQ** code injection via improper input validation (CVE-2026-34197 -- CISA KEV listed)
+- **LangChain Prompt Loader** symlink-based arbitrary file reads via relative paths
+- **ClawHavoc IOC**: `noreplyboter/polymarket-all-in-one` malicious skill with curl-based reverse shell
+
+## Previous: v0.17.0 (2026-04-15)
 
 MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config poisoning + MCP service vulnerability batch. Largest Prowl sweep ever (104 findings). 12 live payloads blocked by existing defenses. 45/45 criticals covered.
 
@@ -334,7 +359,7 @@ MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config p
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.17.0 — now including MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.18.0 — now including AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -401,6 +426,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.18.0** | 2026-04-18 | AI platform SQL/NoSQL injection (CVE-2026-40351/40352 FastGPT, CVE-2026-40315 / GHSA-rg3h PraisonAI), MCP service expansion (CVE-2026-35402 mcp-neo4j-cypher APOC, CVE-2026-6494 AAP MCP, CVE-2026-39313 mcp-framework DoS), infra CVEs (CVE-2026-33555 HAProxy QUIC, CVE-2026-34197 ActiveMQ CISA KEV), LangChain Prompt Loader symlink read, ClawHavoc IOC. 50/50 criticals. 9 live payloads blocked. |
 | **v0.17.0** | 2026-04-15 | MCP STDIO config hijacking (CVE-2026-30615/30624/30616/30617), OpenAI Codex CLI config poisoning (CVE-2025-61260), MCP service batch (kubernetes/SkyWalking/Splunk/Tolgee). 45/45 criticals. 12 live payloads blocked. |
 | **v0.16.0** | 2026-04-14 | PraisonAI YAML workflow RCE (GHSA-vc46), WebSocket hijack (GHSA-8x8f), tools.py auto-import RCE (GHSA-g985), MCPHub auth bypass (CVE-2025-13822). 37/37 criticals. 5 live payloads blocked. |
 | **v0.15.1** | 2026-04-14 | FFmpeg mov.c recursive observation defense (new vuln class), MaxKB stored XSS + incomplete RCE (CVE-2026-39417/39426) |

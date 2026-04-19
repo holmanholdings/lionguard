@@ -127,6 +127,24 @@ v0.17.0 patches (from Prowl 2026-04-15 -- largest sweep, 104 findings):
 - MCP service batch: kubernetes arg injection (CVE-2026-39884), SkyWalking
   SSRF (CVE-2026-34476), Splunk MCP token exposure (CVE-2026-20205),
   Tolgee file read (CVE-2026-32251)
+
+v0.18.0 patches (from Prowl 2026-04-18 -- 76 findings, 9 live payloads blocked):
+- AI platform SQL/NoSQL injection (new attack class): authentication bypass and
+  data tampering via injection in agent platform login/conversation stores.
+  Covers CVE-2026-40351 (FastGPT NoSQL login bypass), CVE-2026-40352 (FastGPT
+  password change NoSQL injection), CVE-2026-40315 + GHSA-rg3h-x3jw-7jm5
+  (PraisonAI SQL injection in 9 conversation store backends via table_prefix)
+- MCP service expansion: CVE-2026-35402 (mcp-neo4j-cypher read-only bypass via
+  APOC procedures enabling unauthorized writes/SSRF), CVE-2026-6494 (AAP MCP
+  unauthenticated log injection via toolsetroute), CVE-2026-39313 (mcp-framework
+  unbounded request body DoS)
+- Infrastructure-level CVEs touching agent host stacks: CVE-2026-33555 (HAProxy
+  HTTP/3 to HTTP/1 cross-protocol desync via QUIC FIN), CVE-2026-34197
+  (Apache ActiveMQ code injection via improper input validation -- CISA KEV)
+- LangChain Prompt Loader symlink file read: relative-path symlink traversal
+  in langchain-core prompt loading allows arbitrary file reads
+- ClawHavoc IOC: noreplyboter/polymarket-all-in-one malicious skill with
+  curl-based reverse shell backdoor
 """
 
 import re
@@ -505,6 +523,82 @@ MCP_SERVICE_VULN_PATTERNS = [
      "CVE-2026-32251: Tolgee arbitrary file read via translation upload"),
     (r'CVE.2026.32251',
      "CVE-2026-32251: Tolgee file read signature"),
+    (r'(?:mcp.?neo4j.?cypher|neo4j.?cypher)\s*.*(?:read.?only\s+bypass|apoc\s+procedure|unauthorized\s+writ|ssrf)',
+     "CVE-2026-35402: mcp-neo4j-cypher read-only mode bypass via APOC procedures"),
+    (r'CVE.2026.35402',
+     "CVE-2026-35402: mcp-neo4j-cypher APOC bypass signature"),
+    (r'(?:apoc\s+procedur)\s*.*(?:bypass|escape|read.?only|write|ssrf)',
+     "APOC procedure abuse bypassing database read-only restrictions"),
+    (r'(?:aap\s+mcp|aap.?mcp\s+server)\s*.*(?:log\s+inject|unsanitiz\w+\s+toolsetroute|unauthenticat\w+)',
+     "CVE-2026-6494: AAP MCP server unauthenticated log injection via toolsetroute"),
+    (r'CVE.2026.6494',
+     "CVE-2026-6494: AAP MCP log injection signature"),
+    (r'(?:toolsetroute)\s*.*(?:unsanitiz|inject|forg\w+|unauthenticat)',
+     "AAP MCP toolsetroute parameter log forgery vector"),
+    (r'(?:mcp.?framework)\s*.*(?:unbounded|unbound)\s*.*(?:request\s+body|concat\w*|post)\s*.*(?:dos|denial)',
+     "CVE-2026-39313: mcp-framework unbounded request body DoS via large POSTs"),
+    (r'CVE.2026.39313',
+     "CVE-2026-39313: mcp-framework HTTP transport DoS signature"),
+]
+
+AI_PLATFORM_INJECTION_PATTERNS = [
+    (r'(?:fastgpt)\s*.*(?:nosql|no.sql)\s*.*(?:inject|bypass|password|login|auth)',
+     "CVE-2026-40351: FastGPT NoSQL injection in password-based login (account takeover)"),
+    (r'CVE.2026.40351',
+     "CVE-2026-40351: FastGPT NoSQL login bypass signature"),
+    (r'(?:fastgpt)\s*.*(?:password\s+change|change\s+password)\s*.*(?:nosql|inject|takeover)',
+     "CVE-2026-40352: FastGPT NoSQL injection in password change endpoint"),
+    (r'CVE.2026.40352',
+     "CVE-2026-40352: FastGPT password change NoSQL injection signature"),
+    (r'(?:bypass|skip|ignore)\s+(?:password\s+(?:check|verif)|auth\s+check)\s*.*(?:nosql|inject|root\s+admin)',
+     "AI platform auth bypass via NoSQL injection"),
+    (r'(?:praisonai)\s*.*(?:sql\s+inject|sqli)\s*.*(?:conversation|table_prefix|store|backend)',
+     "GHSA-rg3h-x3jw-7jm5: PraisonAI SQL injection in conversation store via unvalidated table_prefix"),
+    (r'CVE.2026.40315',
+     "CVE-2026-40315: PraisonAI SQL injection signature (incomplete fix)"),
+    (r'GHSA.rg3h.x3jw.7jm5',
+     "GHSA-rg3h-x3jw-7jm5: PraisonAI conversation store SQL injection signature"),
+    (r'(?:unvalidated|unsanitiz\w+)\s+(?:table_prefix|table\s+prefix)\s*.*(?:sql|inject|conversation)',
+     "PraisonAI table_prefix SQL injection vector"),
+    (r'(?:agent\s+platform|llm\s+platform|ai\s+platform)\s*.*(?:sql\s+inject|nosql\s+inject|sqli)\s*.*(?:login|password|auth|takeover)',
+     "AI agent platform SQL/NoSQL injection enabling auth bypass or data tampering"),
+]
+
+INFRASTRUCTURE_CVE_PATTERNS = [
+    (r'(?:haproxy)\s*.*(?:http/?3|http3)\s*.*(?:http/?1|http1)\s*.*(?:desync|smuggl|cross.protocol)',
+     "CVE-2026-33555: HAProxy HTTP/3 to HTTP/1 cross-protocol request smuggling"),
+    (r'CVE.2026.33555',
+     "CVE-2026-33555: HAProxy HTTP/3->HTTP/1 desync signature"),
+    (r'(?:quic\s+fin|standalone\s+quic)\s*.*(?:packet|smuggl|desync|downgrad)',
+     "QUIC FIN packet abuse enabling HTTP/1 request smuggling"),
+    (r'(?:cross.?protocol)\s+(?:request\s+smuggl|desync)\s*.*(?:http|quic|h3|h1)',
+     "Cross-protocol HTTP request smuggling attack"),
+    (r'(?:apache\s+activemq|activemq)\s*.*(?:code\s+inject|improper\s+input|rce|exec)',
+     "CVE-2026-34197: Apache ActiveMQ code injection via improper input validation (CISA KEV)"),
+    (r'CVE.2026.34197',
+     "CVE-2026-34197: Apache ActiveMQ code injection signature"),
+    (r'(?:cisa\s+kev|kev.listed|known\s+exploited)\s*.*(?:activemq|haproxy|apache)',
+     "CISA KEV active exploitation alert (infrastructure)"),
+]
+
+LANGCHAIN_PROMPT_PATTERNS = [
+    (r'(?:langchain|langchain.?core)\s*.*(?:prompt\s+loader|promptloader)\s*.*(?:symlink|sym.link|relative\s+path)\s*.*(?:file\s+read|arbitrary\s+file|travers)',
+     "LangChain Prompt Loader symlink-based arbitrary file read"),
+    (r'(?:langchain.?core)\s*.*(?:symlink|relative\s+path)\s*.*(?:file\s+read|arbitrary)',
+     "langchain-core symlink file read vulnerability"),
+    (r'(?:prompt\s+loader)\s+(?:symlink|relative\s+path)\s*.*(?:read|travers|escape)',
+     "Prompt Loader symlink traversal for file read"),
+]
+
+CLAWHAVOC_IOC_PATTERNS = [
+    (r'noreplyboter/polymarket.all.in.one',
+     "ClawHavoc IOC: noreplyboter/polymarket-all-in-one malicious skill (reverse shell via curl)"),
+    (r'(?:clawhavoc)\s*.*(?:campaign|skill|backdoor|reverse\s+shell)',
+     "ClawHavoc campaign IOC: malicious skill ecosystem"),
+    (r'(?:clawhavoc)',
+     "ClawHavoc malicious skill campaign signature"),
+    (r'(?:noreplyboter)\s*.*(?:skill|polymarket|reverse\s+shell|backdoor)',
+     "ClawHavoc actor: noreplyboter author IOC"),
 ]
 
 KERNEL_DRIVER_PATTERNS = [
@@ -819,6 +913,10 @@ MCP_EXPOSURE_PATTERNS = _compile_patterns(MCP_EXPOSURE_PATTERNS)
 MCP_STDIO_HIJACK_PATTERNS = _compile_patterns(MCP_STDIO_HIJACK_PATTERNS)
 CONFIG_POISONING_PATTERNS = _compile_patterns(CONFIG_POISONING_PATTERNS)
 MCP_SERVICE_VULN_PATTERNS = _compile_patterns(MCP_SERVICE_VULN_PATTERNS)
+AI_PLATFORM_INJECTION_PATTERNS = _compile_patterns(AI_PLATFORM_INJECTION_PATTERNS)
+INFRASTRUCTURE_CVE_PATTERNS = _compile_patterns(INFRASTRUCTURE_CVE_PATTERNS)
+LANGCHAIN_PROMPT_PATTERNS = _compile_patterns(LANGCHAIN_PROMPT_PATTERNS)
+CLAWHAVOC_IOC_PATTERNS = _compile_patterns(CLAWHAVOC_IOC_PATTERNS)
 KERNEL_DRIVER_PATTERNS = _compile_patterns(KERNEL_DRIVER_PATTERNS)
 PLUGIN_TRUST_PATTERNS = _compile_patterns(PLUGIN_TRUST_PATTERNS)
 PAIRING_AUTH_PATTERNS = _compile_patterns(PAIRING_AUTH_PATTERNS)
@@ -880,6 +978,10 @@ class ToolParser:
         self._mcp_stdio_hijack_detections = 0
         self._config_poisoning_detections = 0
         self._mcp_service_vuln_detections = 0
+        self._ai_platform_injection_detections = 0
+        self._infrastructure_cve_detections = 0
+        self._langchain_prompt_detections = 0
+        self._clawhavoc_ioc_detections = 0
         self._kernel_driver_detections = 0
         self._plugin_trust_detections = 0
         self._pairing_auth_detections = 0
@@ -1165,6 +1267,50 @@ class ToolParser:
                         reason=f"MCP service vuln: {mcp_svc_hit}",
                         threat_type="vulnerability",
                         confidence=0.92
+                    ))
+
+        ai_inject_hit = self._detect_ai_platform_injection(raw_result)
+        if ai_inject_hit:
+            self._ai_platform_injection_detections += 1
+            return (f"[Lionguard] AI platform SQL/NoSQL injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"AI platform injection: {ai_inject_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        infra_cve_hit = self._detect_infrastructure_cve(raw_result)
+        if infra_cve_hit:
+            self._infrastructure_cve_detections += 1
+            return (f"[Lionguard] Infrastructure CVE pattern stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Infrastructure CVE: {infra_cve_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.91
+                    ))
+
+        langchain_prompt_hit = self._detect_langchain_prompt(raw_result)
+        if langchain_prompt_hit:
+            self._langchain_prompt_detections += 1
+            return (f"[Lionguard] LangChain Prompt Loader exploit stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"LangChain Prompt Loader: {langchain_prompt_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        clawhavoc_hit = self._detect_clawhavoc_ioc(raw_result)
+        if clawhavoc_hit:
+            self._clawhavoc_ioc_detections += 1
+            return (f"[Lionguard] ClawHavoc IOC stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"ClawHavoc IOC: {clawhavoc_hit}",
+                        threat_type="malicious_skill",
+                        confidence=0.96
                     ))
 
         agent_plat_hit = self._detect_agent_platform(raw_result)
@@ -1499,8 +1645,48 @@ class ToolParser:
     def _detect_mcp_service_vuln(self, text: str) -> Optional[str]:
         """Detect vulnerabilities in specific MCP service implementations:
         kubernetes arg injection, SkyWalking SSRF, Splunk token exposure,
-        Tolgee file read."""
+        Tolgee file read, mcp-neo4j-cypher APOC bypass (CVE-2026-35402),
+        AAP MCP log injection (CVE-2026-6494), mcp-framework DoS
+        (CVE-2026-39313)."""
         for pattern, description in MCP_SERVICE_VULN_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_ai_platform_injection(self, text: str) -> Optional[str]:
+        """Detect SQL/NoSQL injection in AI agent platforms enabling auth
+        bypass and data tampering. Covers FastGPT NoSQL login bypass
+        (CVE-2026-40351), FastGPT password change injection (CVE-2026-40352),
+        and PraisonAI conversation store SQL injection
+        (CVE-2026-40315 / GHSA-rg3h-x3jw-7jm5)."""
+        for pattern, description in AI_PLATFORM_INJECTION_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_infrastructure_cve(self, text: str) -> Optional[str]:
+        """Detect infrastructure-level CVEs that touch agent host stacks.
+        Covers HAProxy HTTP/3 to HTTP/1 cross-protocol desync
+        (CVE-2026-33555) and Apache ActiveMQ code injection
+        (CVE-2026-34197, CISA KEV listed)."""
+        for pattern, description in INFRASTRUCTURE_CVE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_langchain_prompt(self, text: str) -> Optional[str]:
+        """Detect LangChain Prompt Loader symlink-based arbitrary file read
+        (relative-path symlink traversal in langchain-core prompt loading)."""
+        for pattern, description in LANGCHAIN_PROMPT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_clawhavoc_ioc(self, text: str) -> Optional[str]:
+        """Detect ClawHavoc campaign indicators of compromise. Currently
+        targets noreplyboter/polymarket-all-in-one (curl-based reverse
+        shell backdoor) and the broader ClawHavoc skill ecosystem."""
+        for pattern, description in CLAWHAVOC_IOC_PATTERNS:
             if pattern.search(text):
                 return description
         return None
@@ -1640,6 +1826,10 @@ class ToolParser:
             "mcp_stdio_hijack_detections": self._mcp_stdio_hijack_detections,
             "config_poisoning_detections": self._config_poisoning_detections,
             "mcp_service_vuln_detections": self._mcp_service_vuln_detections,
+            "ai_platform_injection_detections": self._ai_platform_injection_detections,
+            "infrastructure_cve_detections": self._infrastructure_cve_detections,
+            "langchain_prompt_detections": self._langchain_prompt_detections,
+            "clawhavoc_ioc_detections": self._clawhavoc_ioc_detections,
             "kernel_driver_detections": self._kernel_driver_detections,
             "plugin_trust_detections": self._plugin_trust_detections,
             "pairing_auth_detections": self._pairing_auth_detections,

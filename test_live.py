@@ -1076,6 +1076,51 @@ for payload, expected, label in v17_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.18.0: AI Platform Injection + Infra CVEs + LangChain + ClawHavoc + MCP Service Expansion
+print(f"\n--- AI Platform Injection + Infra CVEs + LangChain + ClawHavoc (v0.18.0) ---")
+v18_tests = [
+    ("FastGPT NoSQL injection bypasses password check during login", "block", "CVE-2026-40351: FastGPT login"),
+    ("CVE-2026-40351 FastGPT NoSQL login bypass", "block", "CVE-2026-40351: signature"),
+    ("FastGPT password change endpoint NoSQL injection enables takeover", "block", "CVE-2026-40352: FastGPT change"),
+    ("CVE-2026-40352 FastGPT password change NoSQL", "block", "CVE-2026-40352: signature"),
+    ("Bypass password check via NoSQL injection to login as root admin", "block", "Auth bypass NoSQL"),
+    ("PraisonAI SQL injection in 9 conversation store backends via table_prefix", "block", "GHSA-rg3h: PraisonAI SQLi"),
+    ("CVE-2026-40315 PraisonAI SQL injection", "block", "CVE-2026-40315: signature"),
+    ("GHSA-rg3h-x3jw-7jm5 PraisonAI conversation store SQLi", "block", "GHSA: signature"),
+    ("Unvalidated table_prefix enables SQL injection in conversation backend", "block", "table_prefix vector"),
+    ("AI agent platform SQL injection enables auth bypass and takeover", "block", "Generic AI platform SQLi"),
+    ("mcp-neo4j-cypher read-only bypass via APOC procedures enables SSRF", "block", "CVE-2026-35402: neo4j APOC"),
+    ("CVE-2026-35402 mcp-neo4j-cypher APOC bypass", "block", "CVE-2026-35402: signature"),
+    ("APOC procedure abuse bypasses read-only restrictions for unauthorized writes", "block", "APOC bypass class"),
+    ("AAP MCP server unauthenticated log injection via toolsetroute parameter", "block", "CVE-2026-6494: AAP MCP"),
+    ("CVE-2026-6494 AAP MCP log injection", "block", "CVE-2026-6494: signature"),
+    ("toolsetroute unsanitized parameter enables log forgery and injection", "block", "toolsetroute vector"),
+    ("mcp-framework unbounded request body concatenation DoS via large POST", "block", "CVE-2026-39313: mcp DoS"),
+    ("CVE-2026-39313 mcp-framework HTTP transport DoS", "block", "CVE-2026-39313: signature"),
+    ("HAProxy HTTP/3 to HTTP/1 cross-protocol desync via QUIC FIN smuggling", "block", "CVE-2026-33555: HAProxy"),
+    ("CVE-2026-33555 HAProxy HTTP3 HTTP1 desync", "block", "CVE-2026-33555: signature"),
+    ("Standalone QUIC FIN packet enables cross-protocol request smuggling", "block", "QUIC FIN smuggling"),
+    ("Apache ActiveMQ code injection via improper input validation", "block", "CVE-2026-34197: ActiveMQ"),
+    ("CVE-2026-34197 Apache ActiveMQ code injection", "block", "CVE-2026-34197: signature"),
+    ("CISA KEV-listed ActiveMQ actively exploited code injection", "block", "CISA KEV ActiveMQ"),
+    ("LangChain Prompt Loader symlink relative path arbitrary file read", "block", "LangChain prompt symlink"),
+    ("langchain-core symlink relative path file read traversal vulnerability", "block", "langchain-core symlink"),
+    ("Prompt Loader symlink traversal escapes directory for file read", "block", "Prompt Loader traversal"),
+    ("noreplyboter/polymarket-all-in-one malicious skill with reverse shell", "block", "ClawHavoc IOC"),
+    ("ClawHavoc campaign skill backdoor reverse shell via curl", "block", "ClawHavoc campaign"),
+    ("noreplyboter author published polymarket skill containing backdoor", "block", "ClawHavoc actor"),
+    ("Standard FastGPT chat interaction with normal user prompt.", "pass", "False positive check"),
+]
+for payload, expected, label in v18_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")
