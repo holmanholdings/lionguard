@@ -158,6 +158,26 @@ v0.19.0 patches (from Prowl 2026-04-19 -- 71 findings, validation-heavy day,
 - Infrastructure CVE expansion: CVE-2026-22666 (Dolibarr dol_eval()
   whitelist bypass via PHP dynamic callable syntax), CVE-2026-34980 +
   CVE-2026-34990 (CUPS remote unauth RCE-to-root chain in print spooler).
+
+v0.20.0 patches (from Prowl 2026-04-20 / 04-21 / 04-22 -- three-day catch-up,
+mostly quiet days but one critical 9.9 OpenClaw sandbox bypass):
+- OpenClaw sandbox escape via heartbeat context (CVE-2026-41329, CVSS 9.9 --
+  CRITICAL): malicious heartbeat context carries payload that escapes sandbox.
+- OpenClaw env var issue (CVE-2026-41294): companion CVE.
+- MCP service expansion: Apache Doris MCP Server SQL execution bypass via
+  improper context neutralization (CVE-2025-66335); excel-mcp-server
+  arbitrary file read/write/overwrite via crafted filepath
+  (CVE-2026-40576); Flowise MCP adapter unsafe stdio command serialization
+  enabling authenticated RCE (CVE-2026-40933).
+- Agent platform RCE: Flowise CSV Agent prompt injection -> RCE
+  (GHSA-3hjv-c53m-58jj); FastGPT v4.14.13 patches unauthenticated RCE in
+  agent-sandbox + OpenSandbox auth bypass.
+- Infrastructure: Spinnaker double critical RCE (CVE-2026-32604,
+  CVE-2026-32613) enabling cloud env access; Glances Python IP Plugin
+  SSRF via public_api enabling credential leakage (GHSA-g5pq-48mj-jvw8).
+- Denial-of-Wallet expansion: Next AI Draw.io V8 heap exhaustion via
+  unbounded request body accumulation (CVE-2026-40608); LangChain agent
+  executor undocumented 9999-deep recursion driving runaway API costs.
 """
 
 import re
@@ -552,6 +572,22 @@ MCP_SERVICE_VULN_PATTERNS = [
      "CVE-2026-39313: mcp-framework unbounded request body DoS via large POSTs"),
     (r'CVE.2026.39313',
      "CVE-2026-39313: mcp-framework HTTP transport DoS signature"),
+    (r'(?:apache\s+doris|doris\s+mcp|doris.?mcp)\s*.*(?:sql\s+exec\w*|query\s+(?:bypass|validation)|context\s+neutraliz\w+)',
+     "CVE-2025-66335: Apache Doris MCP Server unintended SQL execution + query validation bypass"),
+    (r'CVE.2025.66335',
+     "CVE-2025-66335: Apache Doris MCP Server signature"),
+    (r'(?:improper\s+context\s+neutraliz\w+)\s*.*(?:mcp|doris|sql)',
+     "MCP context neutralization bypass"),
+    (r'(?:excel.?mcp.?server|excel.?mcp)\s*.*(?:path\s+travers|crafted\s+filepath|arbitrary\s+(?:read|write|overwrite))',
+     "CVE-2026-40576: excel-mcp-server path traversal (read/write/overwrite via crafted filepath)"),
+    (r'CVE.2026.40576',
+     "CVE-2026-40576: excel-mcp-server path traversal signature"),
+    (r'(?:flowise)\s*.*(?:mcp\s+adapter|stdio\s+command\s+serializ\w+)\s*.*(?:rce|command\s+inject|unsafe)',
+     "CVE-2026-40933: Flowise unsafe stdio command serialization in MCP adapter (authenticated RCE)"),
+    (r'CVE.2026.40933',
+     "CVE-2026-40933: Flowise MCP stdio RCE signature"),
+    (r'(?:unsafe\s+stdio\s+command\s+serializ\w+)',
+     "Unsafe stdio command serialization vector (MCP adapter RCE)"),
 ]
 
 AI_PLATFORM_INJECTION_PATTERNS = [
@@ -575,6 +611,18 @@ AI_PLATFORM_INJECTION_PATTERNS = [
      "PraisonAI table_prefix SQL injection vector"),
     (r'(?:agent\s+platform|llm\s+platform|ai\s+platform)\s*.*(?:sql\s+inject|nosql\s+inject|sqli)\s*.*(?:login|password|auth|takeover)',
      "AI agent platform SQL/NoSQL injection enabling auth bypass or data tampering"),
+    (r'(?:flowise)\s*.*(?:csv\s+agent|csv\s+inject)\s*.*(?:prompt\s+inject\w+|rce|remote\s+code)',
+     "GHSA-3hjv-c53m-58jj: Flowise CSV Agent prompt injection -> RCE"),
+    (r'GHSA.3hjv.c53m.58jj',
+     "GHSA-3hjv-c53m-58jj: Flowise CSV Agent RCE signature"),
+    (r'(?:csv\s+agent)\s*.*(?:prompt\s+inject\w+|rce|malicious\s+csv)',
+     "CSV Agent prompt-injection-to-RCE vector"),
+    (r'(?:fastgpt)\s*.*(?:agent.?sandbox|opensandbox)\s*.*(?:unauth\w*\s+rce|auth\s+bypass)',
+     "FastGPT v4.14.13 fix: unauthenticated RCE in agent-sandbox / OpenSandbox auth bypass"),
+    (r'(?:fastgpt)\s*.*(?:v?4\.14\.13|4\.14\.1[0-2])\s*.*(?:patch|fix|rce|sandbox)',
+     "FastGPT pre-4.14.13 sandbox/RCE vulnerability"),
+    (r'(?:agent.?sandbox|opensandbox)\s+(?:unauthenticated\s+rce|unauth\w*\s+code)',
+     "Unauthenticated RCE in AI agent sandbox layer"),
 ]
 
 INFRASTRUCTURE_CVE_PATTERNS = [
@@ -608,6 +656,24 @@ INFRASTRUCTURE_CVE_PATTERNS = [
      "CVE-2026-34990: CUPS root privilege escalation signature"),
     (r'(?:cups)\s+(?:printing|spool\w+)\s*.*(?:exploit|rce|takeover)',
      "CUPS printing system exploitation chain"),
+    (r'(?:spinnaker)\s*.*(?:rce|remote\s+code\s+exec|unauthorized\s+access)\s*.*(?:cloud|production|source\s+control)',
+     "CVE-2026-32604 / CVE-2026-32613: Spinnaker RCE + cloud env unauthorized access"),
+    (r'CVE.2026.32604',
+     "CVE-2026-32604: Spinnaker RCE signature"),
+    (r'CVE.2026.32613',
+     "CVE-2026-32613: Spinnaker unauthorized access signature"),
+    (r'(?:spinnaker)\s+(?:cd|continuous\s+delivery|deployment)\s*.*(?:exploit|rce|takeover)',
+     "Spinnaker CD platform exploitation"),
+    (r'(?:glances)\s*.*(?:ip\s+plugin|public_api)\s*.*(?:ssrf|server.?side\s+request|credential\s+leak)',
+     "GHSA-g5pq-48mj-jvw8: Glances Python IP Plugin SSRF via public_api (credential leakage)"),
+    (r'GHSA.g5pq.48mj.jvw8',
+     "GHSA-g5pq-48mj-jvw8: Glances IP Plugin SSRF signature"),
+    (r'(?:next\s+ai\s+draw\.?io|next.?ai.?drawio)\s*.*(?:dos|denial)\s*.*(?:v8|heap|memory|unbounded)',
+     "CVE-2026-40608: Next AI Draw.io DoS via unbounded request body / V8 heap exhaustion"),
+    (r'CVE.2026.40608',
+     "CVE-2026-40608: Next AI Draw.io V8 heap DoS signature"),
+    (r'(?:v8\s+heap\s+(?:memory|exhaust\w+))\s*.*(?:unbounded|accumulat\w+|request\s+body)',
+     "V8 heap memory exhaustion via unbounded body accumulation"),
 ]
 
 LANGCHAIN_PROMPT_PATTERNS = [
@@ -653,6 +719,12 @@ DENIAL_OF_WALLET_PATTERNS = [
      "Cost amplification / economic denial of service"),
     (r'(?:prompt|input)\s+(?:designed|crafted)\s+to\s+(?:maximize|inflate)\s+(?:token|output|response)\s+(?:length|count|consumption)',
      "Prompt crafted to maximize token consumption (denial-of-wallet)"),
+    (r'(?:langchain)\s*.*(?:agent\s+executor|recursion\s+limit|recursion\s+depth)\s*.*(?:9999|9,?999|undocumented|excessive|runaway|deep)',
+     "LangChain agent executor 9999-deep recursion driving runaway API costs (denial-of-wallet)"),
+    (r'(?:agent\s+(?:executor|loop))\s+(?:recursion|recursive)\s*.*(?:limit|depth)\s*.*(?:high|excessive|9999|unbounded)',
+     "Agent executor unbounded recursion enabling cost runaway"),
+    (r'(?:recursion\s+depth|recursion\s+limit)\s*.*(?:exceed|exhaust|drain)\s*.*(?:api\s+(?:cost|credit|budget)|token)',
+     "Recursive agent invocation draining API budget"),
 ]
 
 CLAWHAVOC_IOC_PATTERNS = [
@@ -859,6 +931,16 @@ WRAPPER_PERSISTENCE_PATTERNS = [
 ]
 
 SANDBOX_ESCAPE_PATTERNS = [
+    (r'(?:openclaw)?\s*(?:heartbeat\s+context|heartbeat.md\s+context)\s*.*(?:sandbox\s+bypass|sandbox\s+escape|exec\w+|payload)',
+     "CVE-2026-41329: OpenClaw critical 9.9 sandbox bypass via heartbeat context"),
+    (r'CVE.2026.41329',
+     "CVE-2026-41329: OpenClaw heartbeat sandbox bypass signature (CVSS 9.9)"),
+    (r'(?:heartbeat\s+context|heartbeatcontext)\s*.*(?:malicious|inject|escape|carry\s+payload)',
+     "Heartbeat context carrying malicious payload (sandbox escape)"),
+    (r'CVE.2026.41294',
+     "CVE-2026-41294: OpenClaw env var issue signature"),
+    (r'(?:openclaw)\s+(?:env\s+var|environment\s+variable)\s*.*(?:leak|expos\w+|inject|misus\w+)',
+     "CVE-2026-41294: OpenClaw env var exposure/injection issue"),
     (r'(?:stageSandboxMedia|sandbox[_-]?media|media[_-]?staging)\s*.*(?:symlink|ln\s+-s|mklink)',
      "CVE-2026-31990: symlink in sandbox media staging"),
     (r'(?:symlink|junction|hardlink|ln\s+-s|mklink)\s+.*(?:sandbox|staging|upload|inbound|media)',

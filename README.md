@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**55+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet. Local-first. Zero API cost. MIT licensed.**
+**60+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw heartbeat sandbox bypass. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -153,6 +153,17 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Denial-of-wallet attacks | Blocks token-cost-amplification DoS evading rate limits | ✅ |
 | Dolibarr `dol_eval()` whitelist bypass | Blocks PHP dynamic callable syntax RCE (CVE-2026-22666) | ✅ |
 | CUPS print spooler RCE-to-root | Blocks remote unauth RCE chain (CVE-2026-34980 + CVE-2026-34990) | ✅ |
+| OpenClaw heartbeat sandbox bypass | Blocks critical 9.9 sandbox escape via heartbeat context (CVE-2026-41329) | ✅ |
+| OpenClaw env var exposure | Blocks env var leak/injection (CVE-2026-41294) | ✅ |
+| Apache Doris MCP SQL exec bypass | Blocks improper context neutralization SQL exec (CVE-2025-66335) | ✅ |
+| excel-mcp-server path traversal | Blocks crafted-filepath read/write/overwrite (CVE-2026-40576) | ✅ |
+| Flowise MCP stdio RCE | Blocks unsafe stdio command serialization (CVE-2026-40933) | ✅ |
+| Flowise CSV Agent prompt-to-RCE | Blocks prompt injection -> RCE in CSV agent (GHSA-3hjv-c53m-58jj) | ✅ |
+| FastGPT agent-sandbox unauth RCE | Blocks unauthenticated RCE + OpenSandbox auth bypass (v4.14.13 fix) | ✅ |
+| Spinnaker double critical RCE | Blocks RCE + cloud env access (CVE-2026-32604 + CVE-2026-32613) | ✅ |
+| Glances IP Plugin SSRF | Blocks SSRF + credential leakage via public_api (GHSA-g5pq-48mj-jvw8) | ✅ |
+| Next AI Draw.io V8 heap DoS | Blocks unbounded body accumulation (CVE-2026-40608) | ✅ |
+| LangChain 9999-deep recursion DoW | Catches agent executor recursion runaway draining API budget | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -317,7 +328,24 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.19.0 (2026-04-19)
+## Latest Update: v0.20.0 (2026-04-22)
+
+Three-day catch-up sweep covering Prowl reports for 2026-04-20, 2026-04-21, and 2026-04-22. Mostly quiet days with one CRITICAL 9.9 OpenClaw sandbox bypass and a batch of new MCP/agent platform RCEs. 60/60 criticals covered.
+
+**New in v0.20.0:**
+- **OpenClaw critical 9.9 sandbox bypass via heartbeat context** (CVE-2026-41329) -- malicious heartbeat context carries payload that escapes the sandbox. CRITICAL.
+- **OpenClaw env var issue** (CVE-2026-41294) -- companion CVE.
+- **Apache Doris MCP Server SQL execution bypass** (CVE-2025-66335) via improper context neutralization (versions <0.6.1).
+- **excel-mcp-server path traversal** (CVE-2026-40576) -- arbitrary host file read/write/overwrite via crafted filepath in SSE/Streamable-HTTP modes (versions <=0.1.7).
+- **Flowise unsafe stdio command serialization in MCP adapter** (CVE-2026-40933) -- authenticated RCE.
+- **Flowise CSV Agent prompt injection -> RCE** (GHSA-3hjv-c53m-58jj).
+- **FastGPT v4.14.13 patches** unauthenticated RCE in agent-sandbox + OpenSandbox auth bypass.
+- **Spinnaker double critical RCE** (CVE-2026-32604 + CVE-2026-32613) -- RCE plus unauthorized access to production cloud and source control.
+- **Glances Python IP Plugin SSRF** via `public_api` enabling credential leakage (GHSA-g5pq-48mj-jvw8).
+- **Next AI Draw.io DoS** (CVE-2026-40608) -- V8 heap exhaustion via unbounded request body accumulation (versions <0.4.15).
+- **Denial-of-Wallet expansion**: LangChain agent executor undocumented 9999-deep recursion driving runaway API costs.
+
+## Previous: v0.19.0 (2026-04-19)
 
 **Two new attack classes** + infrastructure CVE expansion. Quiet validation day -- 71 findings, 3 live payloads blocked, and **every single new notable from today was already caught by v0.18.0 patterns shipped yesterday** (FastGPT NoSQL, PraisonAI SQLi, mcp-neo4j APOC, AAP MCP, HAProxy, LangChain symlink, ClawHavoc -- all hitting our existing claws). 55/55 criticals covered.
 
@@ -374,7 +402,7 @@ MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config p
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.19.0 — now including slopsquatting (AI-hallucinated package registration on PyPI/npm), denial-of-wallet (token-cost-amplification DoS evading rate limiting), Dolibarr `dol_eval()` whitelist bypass, CUPS RCE-to-root chain, AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.20.0 — now including OpenClaw critical 9.9 sandbox bypass via heartbeat context (CVE-2026-41329), Apache Doris MCP SQL exec bypass, excel-mcp-server path traversal, Flowise MCP stdio RCE / CSV Agent prompt-injection RCE, FastGPT agent-sandbox unauth RCE, Spinnaker double critical RCE, Glances IP Plugin SSRF, Next AI Draw.io V8 heap DoS, slopsquatting (AI-hallucinated package registration on PyPI/npm), denial-of-wallet (token-cost-amplification DoS evading rate limiting), Dolibarr `dol_eval()` whitelist bypass, CUPS RCE-to-root chain, AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -441,6 +469,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.20.0** | 2026-04-22 | Three-day catch-up (4/20-4/22). CRITICAL CVE-2026-41329 OpenClaw sandbox bypass via heartbeat context (CVSS 9.9) + CVE-2026-41294 env var. MCP/agent platform RCE batch: CVE-2025-66335 Doris MCP SQL bypass, CVE-2026-40576 excel-mcp path traversal, CVE-2026-40933 Flowise MCP stdio RCE, GHSA-3hjv Flowise CSV prompt-to-RCE, FastGPT v4.14.13 unauth RCE fix. Infra: CVE-2026-32604/32613 Spinnaker double RCE, GHSA-g5pq Glances SSRF, CVE-2026-40608 Draw.io V8 heap DoS. Denial-of-wallet expansion: LangChain 9999-deep agent recursion. 60/60 criticals. |
 | **v0.19.0** | 2026-04-19 | Two new attack classes -- slopsquatting (AI-hallucinated package registration + Vibe Coding compound chain) and denial-of-wallet (token-cost-amplification DoS). Infra CVE expansion: CVE-2026-22666 (Dolibarr dol_eval whitelist bypass via PHP dynamic callable syntax), CVE-2026-34980 + CVE-2026-34990 (CUPS unauth RCE-to-root chain). 55/55 criticals. 3 live payloads blocked. Validation day: every new notable already covered by v0.18.0. |
 | **v0.18.0** | 2026-04-18 | AI platform SQL/NoSQL injection (CVE-2026-40351/40352 FastGPT, CVE-2026-40315 / GHSA-rg3h PraisonAI), MCP service expansion (CVE-2026-35402 mcp-neo4j-cypher APOC, CVE-2026-6494 AAP MCP, CVE-2026-39313 mcp-framework DoS), infra CVEs (CVE-2026-33555 HAProxy QUIC, CVE-2026-34197 ActiveMQ CISA KEV), LangChain Prompt Loader symlink read, ClawHavoc IOC. 50/50 criticals. 9 live payloads blocked. |
 | **v0.17.0** | 2026-04-15 | MCP STDIO config hijacking (CVE-2026-30615/30624/30616/30617), OpenAI Codex CLI config poisoning (CVE-2025-61260), MCP service batch (kubernetes/SkyWalking/Splunk/Tolgee). 45/45 criticals. 12 live payloads blocked. |

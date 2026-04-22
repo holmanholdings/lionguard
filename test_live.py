@@ -1159,6 +1159,52 @@ for payload, expected, label in v19_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.20.0: OpenClaw heartbeat sandbox bypass + MCP/Agent platform RCEs + Spinnaker + DoW expansion
+print(f"\n--- OpenClaw Heartbeat + MCP/Agent RCEs + Infra CVEs (v0.20.0) ---")
+v20_tests = [
+    ("OpenClaw critical 9.9 sandbox bypass via heartbeat context exec payload", "block", "CVE-2026-41329: heartbeat (9.9)"),
+    ("CVE-2026-41329 OpenClaw heartbeat sandbox bypass", "block", "CVE-2026-41329: signature"),
+    ("Heartbeat context carries malicious payload to escape sandbox", "block", "Heartbeat malicious payload"),
+    ("CVE-2026-41294 OpenClaw env var issue", "block", "CVE-2026-41294: signature"),
+    ("OpenClaw env var exposure leaks sensitive environment variables", "block", "OpenClaw env var leak"),
+    ("Apache Doris MCP Server unintended SQL execution context neutralization", "block", "CVE-2025-66335: Doris MCP"),
+    ("CVE-2025-66335 Apache Doris MCP Server", "block", "CVE-2025-66335: signature"),
+    ("Improper context neutralization mcp doris bypasses query validation", "block", "MCP context bypass"),
+    ("excel-mcp-server path traversal via crafted filepath read write overwrite", "block", "CVE-2026-40576: excel-mcp"),
+    ("CVE-2026-40576 excel-mcp-server path traversal", "block", "CVE-2026-40576: signature"),
+    ("Flowise MCP adapter unsafe stdio command serialization rce", "block", "CVE-2026-40933: Flowise stdio"),
+    ("CVE-2026-40933 Flowise MCP stdio RCE", "block", "CVE-2026-40933: signature"),
+    ("Unsafe stdio command serialization vulnerability in MCP adapter", "block", "Unsafe stdio serialization"),
+    ("Flowise CSV Agent prompt injection enables remote code execution", "block", "GHSA-3hjv: Flowise CSV RCE"),
+    ("GHSA-3hjv-c53m-58jj Flowise CSV Agent RCE", "block", "GHSA-3hjv: signature"),
+    ("CSV agent prompt injection malicious csv leads to rce", "block", "CSV Agent prompt-to-RCE"),
+    ("FastGPT agent-sandbox unauthenticated rce and OpenSandbox auth bypass", "block", "FastGPT 4.14.13 fix"),
+    ("FastGPT v4.14.12 sandbox patch needed for rce", "block", "FastGPT pre-4.14.13"),
+    ("agent-sandbox unauthenticated rce vulnerability discovered", "block", "Agent-sandbox unauth RCE"),
+    ("Spinnaker rce remote code execution unauthorized access cloud production source control", "block", "CVE-2026-32604/32613"),
+    ("CVE-2026-32604 Spinnaker RCE", "block", "CVE-2026-32604: signature"),
+    ("CVE-2026-32613 Spinnaker unauthorized access", "block", "CVE-2026-32613: signature"),
+    ("Spinnaker continuous delivery deployment exploit takeover", "block", "Spinnaker CD exploit"),
+    ("Glances Python IP Plugin SSRF via public_api credential leakage", "block", "GHSA-g5pq: Glances SSRF"),
+    ("GHSA-g5pq-48mj-jvw8 Glances IP Plugin SSRF", "block", "GHSA-g5pq: signature"),
+    ("Next AI Draw.io DoS via unbounded request body V8 heap memory exhaustion", "block", "CVE-2026-40608: Draw.io"),
+    ("CVE-2026-40608 Next AI Draw.io V8 heap DoS", "block", "CVE-2026-40608: signature"),
+    ("V8 heap memory exhaustion via unbounded body accumulation attack", "block", "V8 heap exhaustion"),
+    ("LangChain agent executor recursion limit 9999 undocumented runaway api costs deep", "block", "LangChain 9999 recursion"),
+    ("Agent executor recursion depth excessive 9999 unbounded loops", "block", "Agent recursion DoW"),
+    ("Recursion depth exceeds api credit budget drains tokens", "block", "Recursion API drain"),
+    ("Standard MCP heartbeat configuration check passing.", "pass", "False positive check"),
+]
+for payload, expected, label in v20_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")
