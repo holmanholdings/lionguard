@@ -1,50 +1,10 @@
-v0.21.0 -- cross-ecosystem CVE expansion (Cohere/OpenAI/LangChain/LlamaIndex/AnythingLLM/Opus 4.7)
+README: add Battle-Tested offensive validation section
 
-Three-day catch-up sweep covering Prowl reports for 2026-04-23, 2026-04-24,
-and 2026-04-25. Quiet validation-heavy days with one live multimodal-injection
-payload blocked by existing v0.12.0 defenses, plus eight cross-ecosystem CVEs
-disclosed by neighbors. No new pattern groups -- every patch extends an
-existing detector. 60/60 criticals (no new criticals in window).
+Documents the Prowl -> Lionguard -> Talon-Copilot closed loop where
+defensive threat intelligence feeds offensive security testing against
+real-world AI code review bots and generative AI services.
 
-Sandbox escape expansion (extends SANDBOX_ESCAPE_PATTERNS):
-- CVE-2026-5752: Cohere Terrarium sandbox escape
-- CVE-2025-59532: OpenAI Codex CLI sandbox escape
-- OpenClaw issue #70573: cross-workspace direct file-read bypass --
-  agents bypass privacy isolation via direct file reads even when
-  memorySearch.enabled=false and workspace directories are separated.
-
-LangChain SSRF expansion (extends LANGCHAIN_PROMPT_PATTERNS):
-- CVE-2026-41481: HTMLHeaderTextSplitter SSRF via redirect chain --
-  initial URL is validated, redirect targets are not. Patched in
-  langchain-text-splitters 1.1.2+.
-- CVE-2026-41488: langchain-openai image token counting SSRF via
-  TOCTOU/DNS rebinding. Patched in langchain-openai 1.1.14+.
-
-Agent platform expansion (extends AGENT_PLATFORM_PATTERNS):
-- LlamaIndex run-llama #21465: embeddings adapter unsafe torch.load()
-  without weights_only=True enables pickle code execution via
-  malicious checkpoint files.
-
-Content hijack expansion (extends CONTENT_HIJACK_PATTERNS):
-- CVE-2026-41318: AnythingLLM Chartable component XSS via unsanitized
-  markdown image alt text. Catches <script>, event handlers,
-  javascript: URIs, and nested HTML inside ![alt](url).
-- Opus 4.7 tokenizer glitch tokens / dead zones (ToxSec): Unicode
-  scanning for Tag Characters (U+E0000-E007F, used in invisible
-  prompt injection), Variation Selectors Supplement, Specials block,
-  and Private Use Area density that mark adversarial glitch-token
-  payloads designed to bypass prompt guards.
-
-Tests:
-- Added v0.21.0 test block (29 attack-vector tests + 4 fresh-guard
-  false-positive sanity checks). All green. Full suite: 0 failures.
-
-Files:
-- lionguard/__init__.py: __version__ = "0.21.0"
-- lionguard/core/guard.py: get_status() version bump
-- lionguard/core/tool_parser.py: docstring + 8 pattern extensions
-- test_live.py: v0.21.0 test block
-- README.md: Latest Update section, Changelog row, Kill Chain intro,
-  defense-layers count (60+ -> 65+), What-it-catches table rows.
-
-The lion prowls so the pride can sleep.
+Covers bug bounty submissions to Google VRP and CodeRabbit VDP,
+Lionguard's role as a shim protecting Talon-Copilot's own LLM pipeline,
+and the human-gated controls (approval phrases, kill switch, rate
+limiting, dual-critic report quality).

@@ -422,6 +422,33 @@ MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config p
 - **v0.3.0 (2026-03-16)** — Propagation flag, privilege escalation detector, state verification hook, vulnerability scanner.
 - **v0.2.0 (2026-03-14)** — URL preview injection, camera SSRF block, supply-chain persona detection.
 
+## Battle-Tested: Offensive Validation
+
+Lionguard's threat intelligence doesn't just defend — it feeds offensive security research. The same CVE patterns, injection techniques, and attack-class knowledge curated through 21 versions of Prowl reports have been used to build **Talon-Copilot**, a sibling offensive testing harness that probes real-world AI code review bots, CI/CD actions, and generative AI services for prompt injection vulnerabilities.
+
+**How the loop works:**
+
+```
+Prowl (threat intel) → Lionguard (defensive patterns) → Talon-Copilot (offensive probes)
+        ↑                                                           |
+        └───────── findings feed back into Prowl/Lionguard ─────────┘
+```
+
+**Targets tested** (all within authorized bug bounty / VDP programs):
+
+| Target | Surface | Result | Program |
+|--------|---------|--------|---------|
+| **CodeRabbit** | PR-body → AI review bot echoes canary | **Strong positive** — submitted | CodeRabbit VDP |
+| **Google Gemini CLI Action** | PR-title/body → `run-gemini-cli@v0` inline review | **Weak positive** — submitted | Google VRP |
+| **Claude Code Security Review** | PR-title → `claude-code-security-review@main` | **Negative** — no canary echo | Anthropic VDP |
+| **Adobe Firefly** | Prompt → image with visual canary (OCR-verified) | **Strong canary**, weak bypass narrative | Adobe H1 |
+| **GitHub Copilot** | Private repo issue → `@copilot` | **Inconclusive** — requires Pro tier | GitHub H1 |
+| **OpenAI ChatGPT Browse** | Hosted test pages → `web_search_preview` | **Positive** — false info injection | OpenAI / Bugcrowd |
+
+**Lionguard's role in Talon-Copilot:** Lionguard is shimmed into Talon-Copilot's own Grok LLM pipeline (`lionguard_shim.py`), scanning all outbound prompts to the writer/critic chain. This prevents poisoned responses from target systems from re-injecting through Talon-Copilot's own analysis loop — the defense protecting the offense tool.
+
+**Controls:** Human-gated approval phrases per probe family (`EXECUTE <probe_id> COPILOT_REPO`), kill switch (`TALON_HALT`), rate limiting, PoC-only framing, JSONL audit ledger, and dual-Grok writer + adversarial critic passes for report quality.
+
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
 Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.21.0 — now including Cohere Terrarium sandbox escape (CVE-2026-5752), OpenAI Codex CLI sandbox escape (CVE-2025-59532), OpenClaw cross-workspace direct file-read bypass (issue #70573), LangChain HTMLHeaderTextSplitter SSRF via redirect chain (CVE-2026-41481), langchain-openai TOCTOU/DNS-rebinding SSRF (CVE-2026-41488), LlamaIndex unsafe `torch.load()` pickle RCE (run-llama #21465), AnythingLLM Chartable markdown alt-text XSS (CVE-2026-41318), Opus 4.7 tokenizer glitch-token / dead-zone Unicode scanning (ToxSec), OpenClaw critical 9.9 sandbox bypass via heartbeat context (CVE-2026-41329), Apache Doris MCP SQL exec bypass, excel-mcp-server path traversal, Flowise MCP stdio RCE / CSV Agent prompt-injection RCE, FastGPT agent-sandbox unauth RCE, Spinnaker double critical RCE, Glances IP Plugin SSRF, Next AI Draw.io V8 heap DoS, slopsquatting (AI-hallucinated package registration on PyPI/npm), denial-of-wallet (token-cost-amplification DoS evading rate limiting), Dolibarr `dol_eval()` whitelist bypass, CUPS RCE-to-root chain, AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
