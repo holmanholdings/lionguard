@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**60+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw heartbeat sandbox bypass. Local-first. Zero API cost. MIT licensed.**
+**65+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw heartbeat sandbox bypass + cross-workspace isolation bypass + LangChain SSRF redirect/TOCTOU + LlamaIndex pickle RCE + AnythingLLM markdown XSS + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -164,6 +164,14 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Glances IP Plugin SSRF | Blocks SSRF + credential leakage via public_api (GHSA-g5pq-48mj-jvw8) | ✅ |
 | Next AI Draw.io V8 heap DoS | Blocks unbounded body accumulation (CVE-2026-40608) | ✅ |
 | LangChain 9999-deep recursion DoW | Catches agent executor recursion runaway draining API budget | ✅ |
+| Cohere Terrarium sandbox escape | Blocks Terrarium escape exploitation (CVE-2026-5752) | ✅ |
+| OpenAI Codex CLI sandbox escape | Blocks Codex CLI isolation breakout (CVE-2025-59532) | ✅ |
+| OpenClaw cross-workspace file-read bypass | Blocks direct file reads bypassing workspace isolation even when memorySearch.enabled=false (issue #70573) | ✅ |
+| LangChain HTMLHeaderTextSplitter SSRF | Blocks SSRF via redirect-chain bypass into internal services (CVE-2026-41481) | ✅ |
+| langchain-openai TOCTOU/DNS-rebinding SSRF | Blocks image-token-counting SSRF via DNS rebinding to internal IPs (CVE-2026-41488) | ✅ |
+| LlamaIndex unsafe `torch.load()` pickle RCE | Blocks pickle-based code execution via embeddings adapter without `weights_only=True` (run-llama #21465) | ✅ |
+| AnythingLLM Chartable markdown XSS | Blocks XSS via `<script>`/event-handler/`javascript:` in markdown image alt text (CVE-2026-41318) | ✅ |
+| Tokenizer glitch tokens / dead zones | Detects Tag Characters, Variation Selectors, Specials, and Private Use Area density used for invisible prompt injection / prompt-guard bypass (Opus 4.7, ToxSec) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -328,7 +336,21 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.20.0 (2026-04-22)
+## Latest Update: v0.21.0 (2026-04-25)
+
+Three-day catch-up sweep covering Prowl reports for 2026-04-23, 2026-04-24, and 2026-04-25. Quiet validation-heavy days with one live multimodal-injection payload blocked by existing v0.12.0 defenses, plus eight cross-ecosystem CVEs from neighbors -- Cohere, OpenAI, LangChain, LlamaIndex, AnythingLLM, and Anthropic's Opus 4.7 tokenizer. No new pattern groups; every patch extends an existing detector. Test suite still green. 60/60 criticals covered (no new criticals in this window).
+
+**New in v0.21.0:**
+- **Cohere Terrarium sandbox escape** (CVE-2026-5752) -- catches the cross-CVE analysis pattern when reports compare two sandbox escapes side by side, treats both as live techniques.
+- **OpenAI Codex CLI sandbox escape** (CVE-2025-59532) -- same disclosure thread; companion to the Terrarium escape.
+- **OpenClaw cross-workspace direct file-read bypass** (issue #70573) -- agents bypass privacy isolation via direct file reads even when `memorySearch.enabled=false` and workspace directories are separated. Workspace isolation only protects what flows through the memory subsystem; raw reads slipped past.
+- **LangChain HTMLHeaderTextSplitter SSRF via redirect chain** (CVE-2026-41481) -- initial URL is validated, redirect targets are not. 3xx chain into internal services. Patched in `langchain-text-splitters` 1.1.2+.
+- **langchain-openai TOCTOU/DNS-rebinding SSRF** (CVE-2026-41488) -- image token counting validates URL, then resolves to internal IP between check and fetch. Patched in `langchain-openai` 1.1.14+.
+- **LlamaIndex embeddings adapter unsafe `torch.load()`** (run-llama #21465) -- `weights_only=True` missing, enabling pickle code execution via malicious checkpoint files. Detects both the unsafe API call pattern and the malicious-pickle-in-PyTorch-loading-path semantic.
+- **AnythingLLM Chartable component XSS** (CVE-2026-41318) -- unsanitized markdown image alt text rendering. Catches `![<script>...](url)`, `![evt onerror=...](url)`, `![javascript:...](url)`, and nested HTML elements.
+- **Opus 4.7 tokenizer glitch token / dead-zone scanning** (ToxSec) -- defensive Unicode scanning for Tag Characters (U+E0000-E007F, used in invisible prompt injection), Variation Selectors Supplement, Specials block, and Private Use Area density that commonly mark adversarial glitch-token payloads designed to bypass prompt guards.
+
+## Previous: v0.20.0 (2026-04-22)
 
 Three-day catch-up sweep covering Prowl reports for 2026-04-20, 2026-04-21, and 2026-04-22. Mostly quiet days with one CRITICAL 9.9 OpenClaw sandbox bypass and a batch of new MCP/agent platform RCEs. 60/60 criticals covered.
 
@@ -402,7 +424,7 @@ MCP STDIO configuration hijacking (new attack class) + OpenAI Codex CLI config p
 
 ## Lionguard vs NVIDIA AI Kill Chain + MITRE ATLAS
 
-Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.20.0 — now including OpenClaw critical 9.9 sandbox bypass via heartbeat context (CVE-2026-41329), Apache Doris MCP SQL exec bypass, excel-mcp-server path traversal, Flowise MCP stdio RCE / CSV Agent prompt-injection RCE, FastGPT agent-sandbox unauth RCE, Spinnaker double critical RCE, Glances IP Plugin SSRF, Next AI Draw.io V8 heap DoS, slopsquatting (AI-hallucinated package registration on PyPI/npm), denial-of-wallet (token-cost-amplification DoS evading rate limiting), Dolibarr `dol_eval()` whitelist bypass, CUPS RCE-to-root chain, AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
+Lionguard covers every stage of [NVIDIA's AI Kill Chain](https://developer.nvidia.com/blog/modeling-attacks-on-ai-powered-apps-with-the-ai-kill-chain-framework/) and the corresponding [MITRE ATLAS](https://atlas.mitre.org/) techniques. All stages fully defended through v0.21.0 — now including Cohere Terrarium sandbox escape (CVE-2026-5752), OpenAI Codex CLI sandbox escape (CVE-2025-59532), OpenClaw cross-workspace direct file-read bypass (issue #70573), LangChain HTMLHeaderTextSplitter SSRF via redirect chain (CVE-2026-41481), langchain-openai TOCTOU/DNS-rebinding SSRF (CVE-2026-41488), LlamaIndex unsafe `torch.load()` pickle RCE (run-llama #21465), AnythingLLM Chartable markdown alt-text XSS (CVE-2026-41318), Opus 4.7 tokenizer glitch-token / dead-zone Unicode scanning (ToxSec), OpenClaw critical 9.9 sandbox bypass via heartbeat context (CVE-2026-41329), Apache Doris MCP SQL exec bypass, excel-mcp-server path traversal, Flowise MCP stdio RCE / CSV Agent prompt-injection RCE, FastGPT agent-sandbox unauth RCE, Spinnaker double critical RCE, Glances IP Plugin SSRF, Next AI Draw.io V8 heap DoS, slopsquatting (AI-hallucinated package registration on PyPI/npm), denial-of-wallet (token-cost-amplification DoS evading rate limiting), Dolibarr `dol_eval()` whitelist bypass, CUPS RCE-to-root chain, AI platform SQL/NoSQL injection (FastGPT/PraisonAI conversation stores), MCP service vuln expansion (mcp-neo4j-cypher APOC bypass / AAP MCP log injection / mcp-framework DoS), infrastructure CVE coverage (HAProxy QUIC desync / Apache ActiveMQ CISA KEV), LangChain Prompt Loader symlink reads, ClawHavoc IOC, MCP STDIO config hijacking (Windsurf/Agent Zero/Jaaz/LangChain-ChatChat), OpenAI Codex CLI config poisoning, MCP service vulns (kubernetes/SkyWalking/Splunk/Tolgee), PraisonAI YAML/WebSocket/auto-import RCE, MCPHub auth bypass, media parser exploits (FFmpeg mov.c), agent platform vulns (AGiXT/PraisonAI), Canvas auth bypass, Ring-0 escalation, OWASP Agentic Top 10, and multimodal attack vectors.
 
 | Kill Chain Stage | What Attackers Do | ATLAS Techniques | Lionguard Defense | Status |
 |-----------------|-------------------|------------------|-------------------|--------|
@@ -469,6 +491,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.21.0** | 2026-04-25 | Three-day catch-up (4/23-4/25). Cross-ecosystem CVE expansion: CVE-2026-5752 Cohere Terrarium sandbox escape + CVE-2025-59532 OpenAI Codex CLI sandbox escape; OpenClaw issue #70573 cross-workspace direct file-read bypassing privacy isolation; CVE-2026-41481 LangChain HTMLHeaderTextSplitter SSRF via redirect chain; CVE-2026-41488 langchain-openai TOCTOU/DNS-rebinding SSRF; LlamaIndex run-llama #21465 unsafe `torch.load()` pickle RCE; CVE-2026-41318 AnythingLLM Chartable markdown alt-text XSS; Opus 4.7 tokenizer glitch-token / dead-zone Unicode scanning (Tag Characters, Variation Selectors, Specials, PUA density). Zero new pattern groups -- every patch extends an existing detector. 60/60 criticals (no new criticals in window). |
 | **v0.20.0** | 2026-04-22 | Three-day catch-up (4/20-4/22). CRITICAL CVE-2026-41329 OpenClaw sandbox bypass via heartbeat context (CVSS 9.9) + CVE-2026-41294 env var. MCP/agent platform RCE batch: CVE-2025-66335 Doris MCP SQL bypass, CVE-2026-40576 excel-mcp path traversal, CVE-2026-40933 Flowise MCP stdio RCE, GHSA-3hjv Flowise CSV prompt-to-RCE, FastGPT v4.14.13 unauth RCE fix. Infra: CVE-2026-32604/32613 Spinnaker double RCE, GHSA-g5pq Glances SSRF, CVE-2026-40608 Draw.io V8 heap DoS. Denial-of-wallet expansion: LangChain 9999-deep agent recursion. 60/60 criticals. |
 | **v0.19.0** | 2026-04-19 | Two new attack classes -- slopsquatting (AI-hallucinated package registration + Vibe Coding compound chain) and denial-of-wallet (token-cost-amplification DoS). Infra CVE expansion: CVE-2026-22666 (Dolibarr dol_eval whitelist bypass via PHP dynamic callable syntax), CVE-2026-34980 + CVE-2026-34990 (CUPS unauth RCE-to-root chain). 55/55 criticals. 3 live payloads blocked. Validation day: every new notable already covered by v0.18.0. |
 | **v0.18.0** | 2026-04-18 | AI platform SQL/NoSQL injection (CVE-2026-40351/40352 FastGPT, CVE-2026-40315 / GHSA-rg3h PraisonAI), MCP service expansion (CVE-2026-35402 mcp-neo4j-cypher APOC, CVE-2026-6494 AAP MCP, CVE-2026-39313 mcp-framework DoS), infra CVEs (CVE-2026-33555 HAProxy QUIC, CVE-2026-34197 ActiveMQ CISA KEV), LangChain Prompt Loader symlink read, ClawHavoc IOC. 50/50 criticals. 9 live payloads blocked. |

@@ -178,6 +178,36 @@ mostly quiet days but one critical 9.9 OpenClaw sandbox bypass):
 - Denial-of-Wallet expansion: Next AI Draw.io V8 heap exhaustion via
   unbounded request body accumulation (CVE-2026-40608); LangChain agent
   executor undocumented 9999-deep recursion driving runaway API costs.
+
+v0.21.0 patches (from Prowl 2026-04-23 / 04-24 / 04-25 -- three-day catch-up,
+quiet days but covering several cross-ecosystem CVEs disclosed by neighbors):
+- Sandbox escape expansion: Cohere Terrarium sandbox escape
+  (CVE-2026-5752) and OpenAI Codex CLI sandbox escape (CVE-2025-59532).
+  Cross-CVE analysis pattern -- whenever a research post compares two
+  sandbox escapes side by side, treat both as live techniques.
+- OpenClaw cross-workspace file-read bypass (issue #70573): agents
+  bypass privacy isolation via direct file reads even when
+  memorySearch.enabled=false and workspace directories are separated.
+  Workspace isolation only protects what the agent retrieves through
+  the memory subsystem; raw file reads slip past the boundary.
+- LangChain SSRF expansion: CVE-2026-41481 (HTMLHeaderTextSplitter
+  validates the initial URL but does not validate redirect targets,
+  enabling SSRF via 3xx chain into internal services) and
+  CVE-2026-41488 (langchain-openai image token counting via TOCTOU /
+  DNS rebinding -- URL passes validation, then resolves to internal
+  IP between check and fetch).
+- LlamaIndex embeddings adapter unsafe deserialization
+  (run-llama #21465): torch.load() called without weights_only=True,
+  enabling arbitrary code execution via malicious pickle files in
+  the embeddings checkpoint loading path.
+- AnythingLLM Chartable component XSS (CVE-2026-41318): unsanitized
+  alt text in markdown image rendering enables stored/reflected XSS
+  via the chart UI. Extends content hijack scanning to cover the
+  ![alt-with-script](url) markdown pattern.
+- Opus 4.7 tokenizer glitch tokens (ToxSec): defensive scanning for
+  Unicode Private Use Area chars and other dead-zone markers that
+  commonly appear in adversarial glitch-token payloads designed to
+  bypass prompt guards via tokenizer ambiguity.
 """
 
 import re
@@ -683,6 +713,26 @@ LANGCHAIN_PROMPT_PATTERNS = [
      "langchain-core symlink file read vulnerability"),
     (r'(?:prompt\s+loader)\s+(?:symlink|relative\s+path)\s*.*(?:read|travers|escape)',
      "Prompt Loader symlink traversal for file read"),
+    (r'(?:langchain|langchain.?text.?splitters)\s*.*(?:htmlheadertextsplitter|html\s*header\s*text\s*splitter)\s*.*(?:ssrf|redirect|fetch|internal)',
+     "CVE-2026-41481: LangChain HTMLHeaderTextSplitter SSRF via redirect chain bypass"),
+    (r'CVE.2026.41481',
+     "CVE-2026-41481: LangChain HTMLHeaderTextSplitter SSRF signature"),
+    (r'(?:htmlheadertextsplitter)',
+     "LangChain HTMLHeaderTextSplitter (CVE-2026-41481 vulnerable component)"),
+    (r'(?:validat\w+)\s+(?:initial\s+url|first\s+url|original\s+url)\s*.*(?:not|fail\w*|skip\w*)\s*.*(?:redirect\s+target|redirect\s+url|3xx)',
+     "SSRF: redirect target not revalidated after initial URL check"),
+    (r'(?:redirect\s+chain|redirect\s+target)\s*.*(?:bypass|ssrf|internal\s+(?:service|ip|host)|metadata)',
+     "SSRF via redirect chain into internal services"),
+    (r'(?:langchain.?openai|langchain.openai)\s*.*(?:image\s+token|image\s+counting|count\w*\s+image)\s*.*(?:ssrf|toctou|dns\s+rebind\w+|internal)',
+     "CVE-2026-41488: langchain-openai image token counting SSRF via TOCTOU/DNS rebinding"),
+    (r'CVE.2026.41488',
+     "CVE-2026-41488: langchain-openai TOCTOU/DNS-rebinding SSRF signature"),
+    (r'(?:langchain.?openai)\s*.*(?:1\.1\.1[0-3])\s*.*(?:vulnerable|patched|update|upgrade)',
+     "langchain-openai pre-1.1.14 vulnerable to TOCTOU/DNS-rebinding SSRF"),
+    (r'(?:toctou|time.?of.?check.?time.?of.?use)\s*.*(?:url|fetch|request|dns|resolve)',
+     "TOCTOU race in URL validation -> fetch path"),
+    (r'(?:dns\s+rebind\w+|dns.rebind)\s*.*(?:internal|private|metadata|169\.254|127\.0\.0\.1|localhost)',
+     "DNS rebinding to internal/metadata IP after URL validation"),
 ]
 
 SLOPSQUATTING_PATTERNS = [
@@ -842,6 +892,20 @@ AGENT_PLATFORM_PATTERNS = [
      "GHSA-g985-wjh9-qxxc: PraisonAI tools.py auto-import RCE"),
     (r'GHSA.g985.wjh9.qxxc',
      "GHSA-g985-wjh9-qxxc: PraisonAI tools.py auto-import RCE signature"),
+    (r'(?:llamaindex|llama.?index|llama_index)\s*.*(?:torch\.load|torch_load|pytorch\s+load)\s*.*(?:weights_only|pickle|rce|arbitrary\s+code|deserializ)',
+     "LlamaIndex embeddings adapter unsafe torch.load() (pickle RCE) -- run-llama #21465"),
+    (r'(?:torch\.load)\s*\([^)]*\)\s*.*(?:without|missing|no)\s+weights_only',
+     "Unsafe torch.load() call without weights_only=True (pickle deserialization RCE)"),
+    (r'(?:torch\.load)\s*\([^)]*weights_only\s*=\s*False',
+     "torch.load() with weights_only=False (pickle code execution risk)"),
+    (r'(?:malicious\s+)?pickle\s+(?:file|payload|deserializ)\s*.*(?:torch|pytorch|llamaindex|llama.?index|embedding|checkpoint|adapter)',
+     "Malicious pickle file in PyTorch/LlamaIndex embeddings or checkpoint loading"),
+    (r'(?:llamaindex|llama.?index)\s*.*(?:embeddings?\s+adapter|embedding\s+model)\s*.*(?:exploit|rce|unsafe|pickle)',
+     "LlamaIndex embeddings adapter exploitation (unsafe deserialization)"),
+    (r'(?:run.llama|run_llama|llama.index)\s*.*(?:#21465|issue\s+21465)',
+     "LlamaIndex run-llama issue #21465: torch.load pickle RCE"),
+    (r'(?:pickle\s+(?:rce|code\s+execution|arbitrary\s+code))\s*.*(?:agent|llm|llama|pytorch|embedding)',
+     "Pickle deserialization RCE in AI agent / model loading path"),
 ]
 
 CANVAS_AUTH_PATTERNS = [
@@ -959,6 +1023,28 @@ SANDBOX_ESCAPE_PATTERNS = [
      "CVE-2026-28461: unbounded memory growth attack"),
     (r'(?:approval|auth)\s+(?:integrity|check|validation)\s+(?:bypass|skip|circumvent|mismatch)',
      "CVE-2026-29608: approval integrity bypass"),
+    (r'(?:cohere)\s*.*(?:terrarium)\s*.*(?:sandbox\s+escape|sandbox\s+bypass|escape|exec\w+)',
+     "CVE-2026-5752: Cohere Terrarium sandbox escape"),
+    (r'CVE.2026.5752',
+     "CVE-2026-5752: Cohere Terrarium sandbox escape signature"),
+    (r'(?:terrarium)\s*.*(?:exploit|escape|bypass|payload)',
+     "Cohere Terrarium sandbox exploitation"),
+    (r'(?:openai\s+)?(?:codex\s+cli|codex.cli)\s*.*(?:sandbox\s+escape|sandbox\s+bypass|escape|exec\w+|exploit)',
+     "CVE-2025-59532: OpenAI Codex CLI sandbox escape"),
+    (r'CVE.2025.59532',
+     "CVE-2025-59532: OpenAI Codex CLI sandbox escape signature"),
+    (r'(?:codex\s+cli)\s*.*(?:exploit|escape|bypass|isolation|breakout)',
+     "Codex CLI sandbox isolation breakout"),
+    (r'(?:cross.workspace|cross.directory)\s+(?:direct\s+)?file\s+read\s*.*(?:bypass|isolat\w+|privacy|workspace)',
+     "OpenClaw issue #70573: cross-workspace direct file read bypassing isolation"),
+    (r'(?:openclaw)\s*.*(?:workspace|isolation|privacy)\s*.*(?:bypass|escape|cross.workspace|direct\s+(?:file\s+)?read)',
+     "OpenClaw workspace isolation bypass via direct file read"),
+    (r'(?:memorySearch\.enabled|memory.search.enabled|memory_search)\s*[=:]\s*(?:false|disabled|off)\s*.*(?:bypass|cross.workspace|direct\s+read|file\s+access)',
+     "OpenClaw isolation bypass: agent reads cross-workspace files even with memorySearch.enabled=false"),
+    (r'(?:disabled\s+memory\s+search|memory\s+search\s+disabled|separate\s+workspace\s+director)\s*.*(?:bypass|read|access|leak)',
+     "Privacy isolation bypass despite disabled memory search and separate workspaces"),
+    (r'(?:agent|llm)\s*.*(?:bypass|circumvent)\s*.*(?:privacy\s+isolat|workspace\s+isolat|cross.tenant)',
+     "Agent privacy/workspace isolation bypass"),
 ]
 
 SANDBOX_CONFIG_PATTERNS = [
@@ -1025,6 +1111,32 @@ CONTENT_HIJACK_PATTERNS = [
      "DOM event handler injection"),
     (r'javascript\s*:\s*(?:void|alert|eval|fetch|XMLHttpRequest)',
      "JavaScript URI injection"),
+    # CVE-2026-41318: AnythingLLM Chartable component XSS via markdown image alt text
+    (r'!\[[^\]]*<script[^>]*>[^\]]*\]\([^)]*\)',
+     "CVE-2026-41318: AnythingLLM Chartable XSS via <script> in markdown image alt text"),
+    (r'!\[[^\]]*on(?:load|error|click|mouseover|focus)\s*=[^\]]*\]\([^)]*\)',
+     "CVE-2026-41318: AnythingLLM Chartable XSS via DOM event handler in markdown image alt text"),
+    (r'!\[[^\]]*javascript\s*:[^\]]*\]\([^)]*\)',
+     "CVE-2026-41318: AnythingLLM Chartable XSS via javascript: URI in markdown image alt text"),
+    (r'!\[[^\]]*(?:&lt;|<)\s*(?:img|iframe|svg|object|embed)[^\]]*\]\([^)]*\)',
+     "Markdown image alt text containing nested HTML element (XSS attempt)"),
+    (r'CVE.2026.41318',
+     "CVE-2026-41318: AnythingLLM Chartable markdown alt-text XSS signature"),
+    (r'(?:anythingllm|anything.?llm)\s*.*(?:chartable)\s*.*(?:xss|script\s+inject|alt\s+text)',
+     "AnythingLLM Chartable component XSS via unsanitized markdown alt text"),
+    # Opus 4.7 tokenizer glitch tokens / dead zones (ToxSec 2026-04-24)
+    (r'[\U000E0000-\U000E007F]{2,}',
+     "Tokenizer glitch payload: Tag Character block (U+E0000-U+E007F) used for invisible prompt injection"),
+    (r'[\U000E0100-\U000E01EF]{4,}',
+     "Tokenizer glitch payload: Variation Selectors Supplement (U+E0100-U+E01EF) clustered density"),
+    (r'[\uFFF0-\uFFFF]{2,}',
+     "Tokenizer glitch payload: Specials block (U+FFF0-U+FFFF) clustered density"),
+    (r'[\uE000-\uF8FF]{8,}',
+     "Tokenizer glitch payload: Private Use Area (U+E000-U+F8FF) clustered density (potential dead-zone glitch token)"),
+    (r'(?:opus\s*4\.7|claude\s*opus\s*4\.7)\s*.*(?:tokenizer)\s*.*(?:dead\s+zone|glitch\s+token|unmapped|exploit)',
+     "Opus 4.7 tokenizer dead-zone / glitch-token exploit reference (ToxSec)"),
+    (r'(?:glitch\s+token|tokenizer\s+(?:dead\s+zone|glitch))\s*.*(?:bypass|exploit|prompt\s+guard|jailbreak)',
+     "Tokenizer glitch-token bypass of prompt guards"),
 ]
 
 RAG_POISONING_PATTERNS = [
