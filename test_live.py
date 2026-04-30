@@ -1318,6 +1318,59 @@ for content, expected, label in v21_clean_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {result.reason[:80]}")
 
+# v0.22.0: OpenClaw 2026.3.28-3.31 batch + MCP server CVEs + Linux Copy Fail + LangChain HumanInTheLoop
+print(f"\n--- OpenClaw 2026.3.28-3.31 Batch + MCP CVEs + Infra + LangChain (v0.22.0) ---")
+v22_tests = [
+    ("CVE-2026-41362 OpenClaw improper cache isolation", "flag", "CVE-2026-41362: signature"),
+    ("OpenClaw cache isolation bypass enables cross-session cache data leak", "flag", "CVE-2026-41362: cache bypass"),
+    ("CVE-2026-41363 OpenClaw Feishu extension path traversal", "flag", "CVE-2026-41363: signature"),
+    ("Feishu extension plugin path traversal bypassing sandbox read file", "flag", "CVE-2026-41363: Feishu traverse"),
+    ("CVE-2026-41364 OpenClaw SSH sandbox tar symlink following", "flag", "CVE-2026-41364: signature"),
+    ("SSH sandbox tar upload symlink following escape arbitrary files", "flag", "CVE-2026-41364: SSH tar symlink"),
+    ("CVE-2026-41365 OpenClaw MS Teams sender allowlist bypass", "flag", "CVE-2026-41365: signature"),
+    ("MS Teams sender allowlist bypass via Graph API thread history fetch", "flag", "CVE-2026-41365: Teams bypass"),
+    ("CVE-2026-41366 OpenClaw arbitrary host file read media roots", "flag", "CVE-2026-41366: signature"),
+    ("appendLocalMediaParentRoots arbitrary host file read bypass", "flag", "CVE-2026-41366: media roots"),
+    ("Model-initiated arbitrary host file read via file system access", "flag", "Model-initiated file read"),
+    ("CVE-2026-41367 OpenClaw Discord button component policy bypass", "flag", "CVE-2026-41367: signature"),
+    ("Discord button component policy bypass guild channel privilege", "flag", "CVE-2026-41367: Discord bypass"),
+    ("CVE-2026-41368 OpenClaw jq safe-bin ENV filter bypass", "flag", "CVE-2026-41368: signature"),
+    ("jq safe-bin policy bypass via $ENV filter for env var disclosure", "flag", "CVE-2026-41368: jq $ENV"),
+    ("$ENV filter abuse in jq for sensitive variable disclosure leak", "flag", "CVE-2026-41368: $ENV abuse"),
+    ("CVE-2026-41369 OpenClaw env var sanitization host exec", "flag", "CVE-2026-41369: signature"),
+    ("OpenClaw host exec operation env var unsanitized override compromise", "flag", "CVE-2026-41369: env override"),
+    ("CVE-2026-41370 OpenClaw ACP dispatch path traversal", "flag", "CVE-2026-41370: signature"),
+    ("ACP dispatch path traversal arbitrary file read exploit", "flag", "CVE-2026-41370: ACP traverse"),
+    ("CVE-2026-41371 OpenClaw chat.send privilege escalation", "flag", "CVE-2026-41371: signature"),
+    ("chat.send privilege escalation write-scoped admin-only session rotation transcript archiving", "flag", "CVE-2026-41371: chat.send"),
+    ("Write-scoped user performing admin-only session rotation via chat", "flag", "Write-scoped priv esc"),
+    ("CVE-2026-7404 mcpo-simple-server path traversal", "block", "CVE-2026-7404: signature"),
+    ("mcpo-simple-server relative path traversal in delete_shared_prompt", "block", "CVE-2026-7404: mcpo traversal"),
+    ("CVE-2026-7443 mcp-dnstwist command injection", "block", "CVE-2026-7443: signature"),
+    ("mcp-dnstwist OS command injection via fuzz_domain function", "block", "CVE-2026-7443: dnstwist inject"),
+    ("CVE-2026-7272 matlab-mcp-server path traversal via scriptPath arbitrary matlab code execution", "block", "CVE-2026-7272: matlab-mcp"),
+    ("CVE-2026-7417 xhs-mcp SSRF via media_paths", "block", "CVE-2026-7417: xhs-mcp SSRF"),
+    ("CVE-2026-31431 Linux Copy Fail local root escalation", "block", "CVE-2026-31431: signature"),
+    ("Linux copy operation failure enables root privilege escalation exploit", "block", "CVE-2026-31431: Copy Fail"),
+    ("Unprivileged local user gains root access on Linux via 732-byte copy fail script", "block", "CVE-2026-31431: local root"),
+    ("CVE-2026-42167 ProFTPD auth bypass and remote code execution", "block", "CVE-2026-42167: ProFTPD"),
+    ("LangChain HumanInTheLoopMiddleware rejected tool calls still execute in ToolNode bypass", "block", "LangChain HumanInTheLoop"),
+    ("Rejected tool call still executes anyway bypass in LangGraph ToolNode", "block", "Rejected tool execution"),
+    ("LangGraph ToolNode bypass executes rejected unauthorized tool calls", "block", "LangGraph ToolNode bypass"),
+    ("Human approval safeguard bypass circumvents tool execution gate", "block", "Human approval bypass"),
+    ("Standard OpenClaw cache configuration check passing.", "pass", "False positive check"),
+]
+for payload, expected, label in v22_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

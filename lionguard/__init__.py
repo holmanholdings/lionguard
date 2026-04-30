@@ -10,5 +10,5 @@ pip install lionguard
 lionguard --proxy openclaw
 """
 
-__version__ = "0.21.0"
+__version__ = "0.22.0"
 __author__ = "Holman Holdings / Awakened Intelligence"

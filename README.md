@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**65+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw heartbeat sandbox bypass + cross-workspace isolation bypass + LangChain SSRF redirect/TOCTOU + LlamaIndex pickle RCE + AnythingLLM markdown XSS + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**70+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -336,7 +336,18 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.21.0 (2026-04-25)
+## Latest Update: v0.22.0 (2026-04-30)
+
+Five-day catch-up sweep covering Prowl reports for 2026-04-26 through 2026-04-30. Two live payloads BLOCKED by existing defenses on 4/28 (OpenClaw cache isolation caught by webhook replay pattern, SSH sandbox tar symlink caught by CVE-2026-31990 pattern). The big event: the OpenClaw 2026.3.28-3.31 security patch cycle dropped 10 CVEs in a single day. Also: new MCP server CVEs, a critical Linux kernel local root escalation, and a LangChain human-approval bypass.
+
+**New in v0.22.0:**
+- **OpenClaw 2026.3.28-3.31 batch** (10 CVEs): cache isolation bypass (CVE-2026-41362), Feishu extension path traversal (CVE-2026-41363), SSH sandbox tar symlink (CVE-2026-41364), MS Teams sender allowlist bypass via Graph API (CVE-2026-41365), arbitrary host file read via `appendLocalMediaParentRoots` (CVE-2026-41366), Discord button/component policy bypass (CVE-2026-41367), jq safe-bin `$ENV` filter bypass for env var disclosure (CVE-2026-41368), env var sanitization failure in host exec (CVE-2026-41369), ACP dispatch path traversal (CVE-2026-41370), `chat.send` privilege escalation enabling write-scoped users to perform admin-only session rotation and transcript archiving (CVE-2026-41371).
+- **MCP service expansion**: mcpo-simple-server path traversal in `delete_shared_prompt` (CVE-2026-7404), mcp-dnstwist OS command injection via `fuzz_domain` (CVE-2026-7443), matlab-mcp-server path traversal via `scriptPath` (CVE-2026-7272), xcode-mcp-server vulnerability (CVE-2026-7416), xhs-mcp SSRF via `media_paths` (CVE-2026-7417).
+- **Linux "Copy Fail" local root escalation** (CVE-2026-31431) -- 732-byte script, unprivileged user to root on all major Linux distros. Critical for any agent running on Linux hosts.
+- **ProFTPD auth bypass + RCE** (CVE-2026-42167).
+- **LangChain HumanInTheLoopMiddleware bug** (langchain-ai #37093) -- rejected tool calls still execute in LangGraph's ToolNode, bypassing human approval safeguards. Directly relevant to any agent using LangChain's human-in-the-loop gates.
+
+## Previous: v0.21.0 (2026-04-25)
 
 Three-day catch-up sweep covering Prowl reports for 2026-04-23, 2026-04-24, and 2026-04-25. Quiet validation-heavy days with one live multimodal-injection payload blocked by existing v0.12.0 defenses, plus eight cross-ecosystem CVEs from neighbors -- Cohere, OpenAI, LangChain, LlamaIndex, AnythingLLM, and Anthropic's Opus 4.7 tokenizer. No new pattern groups; every patch extends an existing detector. Test suite still green. 60/60 criticals covered (no new criticals in this window).
 
@@ -518,6 +529,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.22.0** | 2026-04-30 | Five-day catch-up (4/26-4/30). OpenClaw 2026.3.28-3.31 batch: 10 CVEs (CVE-2026-41362 through 41371) covering cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV filter, ACP dispatch traversal, chat.send priv esc, and more. MCP service expansion: CVE-2026-7404 mcpo path traversal, CVE-2026-7443 mcp-dnstwist cmd injection, CVE-2026-7272 matlab-mcp path traversal, CVE-2026-7416/7417. Infrastructure: CVE-2026-31431 Linux Copy Fail local root (732-byte exploit), CVE-2026-42167 ProFTPD auth bypass + RCE. LangChain HumanInTheLoopMiddleware rejected tool execution bypass (langchain-ai #37093). 2 live payloads blocked by existing defenses. |
 | **v0.21.0** | 2026-04-25 | Three-day catch-up (4/23-4/25). Cross-ecosystem CVE expansion: CVE-2026-5752 Cohere Terrarium sandbox escape + CVE-2025-59532 OpenAI Codex CLI sandbox escape; OpenClaw issue #70573 cross-workspace direct file-read bypassing privacy isolation; CVE-2026-41481 LangChain HTMLHeaderTextSplitter SSRF via redirect chain; CVE-2026-41488 langchain-openai TOCTOU/DNS-rebinding SSRF; LlamaIndex run-llama #21465 unsafe `torch.load()` pickle RCE; CVE-2026-41318 AnythingLLM Chartable markdown alt-text XSS; Opus 4.7 tokenizer glitch-token / dead-zone Unicode scanning (Tag Characters, Variation Selectors, Specials, PUA density). Zero new pattern groups -- every patch extends an existing detector. 60/60 criticals (no new criticals in window). |
 | **v0.20.0** | 2026-04-22 | Three-day catch-up (4/20-4/22). CRITICAL CVE-2026-41329 OpenClaw sandbox bypass via heartbeat context (CVSS 9.9) + CVE-2026-41294 env var. MCP/agent platform RCE batch: CVE-2025-66335 Doris MCP SQL bypass, CVE-2026-40576 excel-mcp path traversal, CVE-2026-40933 Flowise MCP stdio RCE, GHSA-3hjv Flowise CSV prompt-to-RCE, FastGPT v4.14.13 unauth RCE fix. Infra: CVE-2026-32604/32613 Spinnaker double RCE, GHSA-g5pq Glances SSRF, CVE-2026-40608 Draw.io V8 heap DoS. Denial-of-wallet expansion: LangChain 9999-deep agent recursion. 60/60 criticals. |
 | **v0.19.0** | 2026-04-19 | Two new attack classes -- slopsquatting (AI-hallucinated package registration + Vibe Coding compound chain) and denial-of-wallet (token-cost-amplification DoS). Infra CVE expansion: CVE-2026-22666 (Dolibarr dol_eval whitelist bypass via PHP dynamic callable syntax), CVE-2026-34980 + CVE-2026-34990 (CUPS unauth RCE-to-root chain). 55/55 criticals. 3 live payloads blocked. Validation day: every new notable already covered by v0.18.0. |

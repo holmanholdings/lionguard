@@ -208,6 +208,30 @@ quiet days but covering several cross-ecosystem CVEs disclosed by neighbors):
   Unicode Private Use Area chars and other dead-zone markers that
   commonly appear in adversarial glitch-token payloads designed to
   bypass prompt guards via tokenizer ambiguity.
+
+v0.22.0 patches (from Prowl 2026-04-26 / 04-27 / 04-28 / 04-29 / 04-30 --
+five-day catch-up, two live payloads blocked by existing defenses on 4/28,
+plus the OpenClaw 2026.3.28-3.31 batch CVE sweep):
+- OpenClaw 2026.3.28-3.31 batch (10 CVEs): CVE-2026-41362 (cache
+  isolation bypass), CVE-2026-41363 (Feishu extension path traversal),
+  CVE-2026-41364 (SSH sandbox tar symlink -- already BLOCKED by existing
+  CVE-2026-31990 pattern), CVE-2026-41365 (MS Teams sender allowlist
+  bypass via Graph API), CVE-2026-41366 (arbitrary host file read via
+  appendLocalMediaParentRoots), CVE-2026-41367 (Discord button/component
+  policy bypass), CVE-2026-41368 (jq safe-bin $ENV filter bypass for env
+  var disclosure), CVE-2026-41369 (env var sanitization failure in host
+  exec), CVE-2026-41370 (ACP dispatch path traversal for arbitrary file
+  read), CVE-2026-41371 (chat.send privilege escalation -- write-scoped
+  users performing admin-only session rotation and transcript archiving).
+- MCP service expansion: CVE-2026-7404 (mcpo-simple-server path traversal
+  in delete_shared_prompt), CVE-2026-7443 (mcp-dnstwist OS command
+  injection via fuzz_domain).
+- Infrastructure CVE: CVE-2026-31431 (Linux "Copy Fail" local root
+  privilege escalation -- 732-byte script, unprivileged to root on all
+  major distros).
+- LangChain HumanInTheLoopMiddleware bug: rejected tool calls still
+  execute in LangGraph's ToolNode, bypassing human approval safeguards
+  (langchain-ai #37093).
 """
 
 import re
@@ -395,6 +419,58 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-35651: OpenClaw ANSI escape sequence injection in approval prompts"),
     (r'(?:plugin\s+init|hot.?reload)\s*.*(?:corrupt|security\s+config|exec.?approvals)',
      "OpenClaw plugin init log config corruption during hot-reload"),
+    (r'CVE.2026.41362',
+     "CVE-2026-41362: OpenClaw improper cache isolation signature"),
+    (r'(?:openclaw)\s*.*(?:cache\s+isolat|improper\s+cache|cross.session\s+cache|cache\s+bypass)',
+     "CVE-2026-41362: OpenClaw improper cache isolation enabling cross-session data leak"),
+    (r'CVE.2026.41363',
+     "CVE-2026-41363: OpenClaw Feishu extension path traversal signature"),
+    (r'(?:feishu|lark)\s*.*(?:extension|plugin)\s*.*(?:path\s+travers|arbitrary\s+file|sandbox\s+bypass|read\s+file)',
+     "CVE-2026-41363: OpenClaw Feishu extension path traversal bypassing sandbox"),
+    (r'CVE.2026.41364',
+     "CVE-2026-41364: OpenClaw SSH sandbox tar symlink following signature"),
+    (r'(?:ssh\s+sandbox|sandbox\s+tar)\s*.*(?:symlink|ln\s+-s|upload)\s*.*(?:follow|travers|escape|arbitrary)',
+     "CVE-2026-41364: SSH sandbox tar upload symlink following"),
+    (r'CVE.2026.41365',
+     "CVE-2026-41365: OpenClaw MS Teams sender allowlist bypass signature"),
+    (r'(?:ms\s+teams|microsoft\s+teams|graph\s+api)\s*.*(?:sender\s+allowlist|allowlist\s+bypass|thread\s+history)\s*.*(?:bypass|retrieve|fetch)',
+     "CVE-2026-41365: MS Teams sender allowlist bypass via Graph API thread history"),
+    (r'(?:sender\s+allowlist|allowlist)\s*.*(?:bypass|circumvent)\s*.*(?:teams|graph|thread)',
+     "CVE-2026-41365: sender allowlist bypass in messaging integration"),
+    (r'CVE.2026.41366',
+     "CVE-2026-41366: OpenClaw arbitrary host file read via media roots signature"),
+    (r'(?:appendLocalMediaParentRoots|media.?parent.?roots|local.?media.?roots)\s*.*(?:arbitrary|read|travers|file|bypass)',
+     "CVE-2026-41366: arbitrary host file read via appendLocalMediaParentRoots"),
+    (r'(?:model.initiated|model.driven)\s*.*(?:arbitrary\s+file\s+read|host\s+file|file\s+system)',
+     "CVE-2026-41366: model-initiated arbitrary host file read"),
+    (r'CVE.2026.41367',
+     "CVE-2026-41367: OpenClaw Discord button/component policy bypass signature"),
+    (r'(?:discord)\s*.*(?:button|component)\s*.*(?:policy\s+bypass|guild\s+bypass|channel\s+bypass|privilege)',
+     "CVE-2026-41367: Discord button/component policy enforcement bypass"),
+    (r'CVE.2026.41368',
+     "CVE-2026-41368: OpenClaw jq safe-bin $ENV filter bypass signature"),
+    (r'(?:jq)\s*.*(?:safe.?bin|policy)\s*.*(?:bypass|\$ENV|env\s+filter|env\s+var\s+disclos)',
+     "CVE-2026-41368: jq safe-bin policy bypass via $ENV filter for env var disclosure"),
+    (r'(?:\$ENV)\s*.*(?:jq|filter|query)\s*.*(?:bypass|disclos|leak|expos)',
+     "CVE-2026-41368: $ENV filter abuse in jq for sensitive variable disclosure"),
+    (r'CVE.2026.41369',
+     "CVE-2026-41369: OpenClaw env var sanitization failure in host exec signature"),
+    (r'(?:openclaw)\s*.*(?:host\s+exec|exec\s+operation)\s*.*(?:env\s+var|environment\s+variable)\s*.*(?:unsanitiz|override|inject|compromise)',
+     "CVE-2026-41369: env var sanitization failure in OpenClaw host exec operations"),
+    (r'(?:package|registry|docker|compiler|tls)\s*.*(?:override|hijack|inject)\s*.*(?:env|environment)\s*.*(?:host\s+exec|exec\s+operation|openclaw)',
+     "CVE-2026-41369: critical config override via unsanitized env vars in host exec"),
+    (r'CVE.2026.41370',
+     "CVE-2026-41370: OpenClaw ACP dispatch path traversal signature"),
+    (r'(?:acp\s+dispatch|acp.dispatch)\s*.*(?:path\s+travers|arbitrary\s+file|file\s+read)',
+     "CVE-2026-41370: ACP dispatch path traversal enabling arbitrary file read"),
+    (r'CVE.2026.41371',
+     "CVE-2026-41371: OpenClaw chat.send privilege escalation signature"),
+    (r'(?:chat\.send|chat_send)\s*.*(?:privilege\s+escalat|write.scoped|admin.only|session\s+rotat|transcript\s+archiv)',
+     "CVE-2026-41371: chat.send privilege escalation -- write-scoped users performing admin-only operations"),
+    (r'(?:write.scoped|write.?perm)\s*.*(?:session\s+rotat|transcript\s+archiv|admin\s+action)',
+     "CVE-2026-41371: write-scoped user performing admin-only session rotation / transcript archiving"),
+    (r'(?:fork.?guard|fork.write)\s*.*(?:block|prevent|detect)\s*.*(?:git\s+push|gh\s+pr|exec)',
+     "OpenClaw fork-guard: blocking exec-driven fork writes (git push, gh pr)"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -618,6 +694,30 @@ MCP_SERVICE_VULN_PATTERNS = [
      "CVE-2026-40933: Flowise MCP stdio RCE signature"),
     (r'(?:unsafe\s+stdio\s+command\s+serializ\w+)',
      "Unsafe stdio command serialization vector (MCP adapter RCE)"),
+    (r'CVE.2026.7404',
+     "CVE-2026-7404: mcpo-simple-server path traversal signature"),
+    (r'(?:mcpo|mcpo.simple.server|getsimpletool)\s*.*(?:path\s+travers|delete_shared_prompt|arbitrary\s+file)',
+     "CVE-2026-7404: mcpo-simple-server relative path traversal in delete_shared_prompt"),
+    (r'(?:delete_shared_prompt)\s*.*(?:path\s+travers|relative\s+path|manipulat\w+\s+detail)',
+     "CVE-2026-7404: path traversal via manipulated 'detail' argument"),
+    (r'CVE.2026.7443',
+     "CVE-2026-7443: mcp-dnstwist command injection signature"),
+    (r'(?:mcp.?dnstwist|dnstwist)\s*.*(?:command\s+inject|os\s+command|fuzz_domain|rce)',
+     "CVE-2026-7443: mcp-dnstwist OS command injection via fuzz_domain function"),
+    (r'(?:fuzz_domain)\s*.*(?:command\s+inject|os\s+command|manipulat\w+\s+(?:request|argument))',
+     "CVE-2026-7443: command injection via manipulated fuzz_domain request argument"),
+    (r'(?:matlab.?mcp.?server|matlab.mcp)\s*.*(?:path\s+travers|arbitrary\s+(?:matlab|code)\s+exec|scriptPath)',
+     "CVE-2026-7272: matlab-mcp-server path traversal via scriptPath enabling arbitrary code execution"),
+    (r'CVE.2026.7272',
+     "CVE-2026-7272: matlab-mcp-server path traversal signature"),
+    (r'(?:xcode.?mcp.?server|polarvista)\s*.*(?:vulnerab|exploit|rce|inject)',
+     "CVE-2026-7416: xcode-mcp-server vulnerability"),
+    (r'CVE.2026.7416',
+     "CVE-2026-7416: xcode-mcp-server vulnerability signature"),
+    (r'(?:xhs.?mcp)\s*.*(?:ssrf|media_paths|xhs_publish)',
+     "CVE-2026-7417: xhs-mcp SSRF via media_paths in xhs_publish_content"),
+    (r'CVE.2026.7417',
+     "CVE-2026-7417: xhs-mcp SSRF signature"),
 ]
 
 AI_PLATFORM_INJECTION_PATTERNS = [
@@ -704,6 +804,18 @@ INFRASTRUCTURE_CVE_PATTERNS = [
      "CVE-2026-40608: Next AI Draw.io V8 heap DoS signature"),
     (r'(?:v8\s+heap\s+(?:memory|exhaust\w+))\s*.*(?:unbounded|accumulat\w+|request\s+body)',
      "V8 heap memory exhaustion via unbounded body accumulation"),
+    (r'CVE.2026.31431',
+     "CVE-2026-31431: Linux Copy Fail local root escalation signature"),
+    (r'(?:copy\s+fail|copyfail)\s*.*(?:root|privilege\s+escalat|exploit|local\s+root)',
+     "CVE-2026-31431: Linux Copy Fail exploit -- local users gain root via copy operation failure"),
+    (r'(?:linux)\s*.*(?:copy\s+(?:operation|fail))\s*.*(?:root|privilege|escalat|exploit)',
+     "CVE-2026-31431: Linux copy operation failure enabling root privilege escalation"),
+    (r'(?:unprivileged|local\s+user)\s*.*(?:root\s+(?:access|privilege|escalat))\s*.*(?:linux|kernel|732.byte|copy\s+fail)',
+     "CVE-2026-31431: unprivileged local user to root on Linux (Copy Fail)"),
+    (r'CVE.2026.42167',
+     "CVE-2026-42167: ProFTPD auth bypass and RCE signature"),
+    (r'(?:proftpd|proftp)\s*.*(?:auth\s+bypass|rce|remote\s+code|exploit)',
+     "CVE-2026-42167: ProFTPD authentication bypass and remote code execution"),
 ]
 
 LANGCHAIN_PROMPT_PATTERNS = [
@@ -733,6 +845,14 @@ LANGCHAIN_PROMPT_PATTERNS = [
      "TOCTOU race in URL validation -> fetch path"),
     (r'(?:dns\s+rebind\w+|dns.rebind)\s*.*(?:internal|private|metadata|169\.254|127\.0\.0\.1|localhost)',
      "DNS rebinding to internal/metadata IP after URL validation"),
+    (r'(?:humanintheloop|human.?in.?the.?loop)\s*.*(?:middleware|bypass|rejected\s+tool|tool\s+call\s+exec)',
+     "LangChain HumanInTheLoopMiddleware: rejected tool calls still execute in ToolNode"),
+    (r'(?:rejected\s+tool\s+call|rejected\s+tool)\s*.*(?:still\s+exec|execute\s+anyway|bypass|ToolNode)',
+     "LangChain bug: rejected tool calls execute despite human denial (langchain-ai #37093)"),
+    (r'(?:langgraph|lang.?graph)\s*.*(?:ToolNode|tool.?node)\s*.*(?:bypass|rejected|unapproved|unauthorized)\s*.*(?:exec|run|call)',
+     "LangGraph ToolNode executing unapproved/rejected tool calls"),
+    (r'(?:human\s+approval|human\s+gate|human\s+review)\s*.*(?:bypass|circumvent|skip)\s*.*(?:tool\s+call|tool\s+exec|function\s+call)',
+     "Human approval safeguard bypass for tool execution"),
 ]
 
 SLOPSQUATTING_PATTERNS = [
