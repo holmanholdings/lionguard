@@ -232,6 +232,31 @@ plus the OpenClaw 2026.3.28-3.31 batch CVE sweep):
 - LangChain HumanInTheLoopMiddleware bug: rejected tool calls still
   execute in LangGraph's ToolNode, bypassing human approval safeguards
   (langchain-ai #37093).
+
+v0.23.0 patches (from Prowl 2026-05-01 / 05-02 / 05-03 / 05-04 --
+four-day catch-up, one live payload blocked by existing OWASP Agentic
+defenses, plus the first AI-autonomy-driven exploitation event and new
+jailbreak technique):
+- OpenTor / AI agent dark web access (new attack class): AI agents
+  importing Tor libraries (stem, torrequest, torpy), accessing .onion
+  domains, and performing dark web scraping/spidering. Defensive
+  detection for agent Tor network access and .onion enumeration.
+- CVE-2026-41940: cPanel/WHM authentication bypass with PoC on dark web
+  and active exploitation confirmed via honeypots. Mass-exploitation
+  risk via cPanelSniper tool.
+- CVE-2026-7642: website-downloader OS command injection via outputPath
+  manipulation (pskill9/website-downloader <=0.1.0).
+- Sour Cat Jailbreak: new LLM jailbreak technique that bypasses AI
+  safeguards by stating harmful intentions openly and directly rather
+  than encoding or obfuscating them.
+- AI-driven autonomous exploitation (DARKNAVY): AI agent autonomously
+  obtains root shell on fresh Ubuntu 26.04 within 12 hours of release.
+  Behavioral detection for autonomous privilege escalation by AI agents.
+- CVE-2026-7715: mcp-server-arangodb path traversal via outputDir in
+  arango_backup function enabling arbitrary file access.
+- Zero-click data exfiltration prompt injection: evolved 2026 prompt
+  injection patterns including zero-click exfiltration where injected
+  prompts trigger data theft without user interaction.
 """
 
 import re
@@ -718,6 +743,12 @@ MCP_SERVICE_VULN_PATTERNS = [
      "CVE-2026-7417: xhs-mcp SSRF via media_paths in xhs_publish_content"),
     (r'CVE.2026.7417',
      "CVE-2026-7417: xhs-mcp SSRF signature"),
+    (r'CVE.2026.7715',
+     "CVE-2026-7715: mcp-server-arangodb path traversal signature"),
+    (r'(?:mcp.?server.?arangodb|arangodb.?mcp)\s*.*(?:path\s+travers|arbitrary\s+file|outputDir|arango_backup)',
+     "CVE-2026-7715: mcp-server-arangodb path traversal via outputDir in arango_backup"),
+    (r'(?:arango_backup)\s*.*(?:path\s+travers|outputDir|manipulat\w+|arbitrary)',
+     "CVE-2026-7715: arango_backup function path traversal via outputDir"),
 ]
 
 AI_PLATFORM_INJECTION_PATTERNS = [
@@ -816,6 +847,18 @@ INFRASTRUCTURE_CVE_PATTERNS = [
      "CVE-2026-42167: ProFTPD auth bypass and RCE signature"),
     (r'(?:proftpd|proftp)\s*.*(?:auth\s+bypass|rce|remote\s+code|exploit)',
      "CVE-2026-42167: ProFTPD authentication bypass and remote code execution"),
+    (r'CVE.2026.41940',
+     "CVE-2026-41940: cPanel/WHM authentication bypass signature"),
+    (r'(?:cpanel|whm)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|poc|exploit)',
+     "CVE-2026-41940: cPanel/WHM authentication bypass (PoC on dark web, active exploitation)"),
+    (r'(?:cpanelsniper|cpanel.?sniper)\s*.*(?:exploit|mass|scan|attack)',
+     "CVE-2026-41940: cPanelSniper mass-exploitation tool for cPanel auth bypass"),
+    (r'CVE.2026.7642',
+     "CVE-2026-7642: website-downloader OS command injection signature"),
+    (r'(?:website.?downloader|pskill9)\s*.*(?:command\s+inject|os\s+command|outputPath|rce)',
+     "CVE-2026-7642: website-downloader OS command injection via outputPath manipulation"),
+    (r'(?:outputPath)\s*.*(?:command\s+inject|os\s+command|manipulat|rce|arbitrary)',
+     "CVE-2026-7642: command injection via outputPath parameter"),
 ]
 
 LANGCHAIN_PROMPT_PATTERNS = [
@@ -1026,6 +1069,24 @@ AGENT_PLATFORM_PATTERNS = [
      "LlamaIndex run-llama issue #21465: torch.load pickle RCE"),
     (r'(?:pickle\s+(?:rce|code\s+execution|arbitrary\s+code))\s*.*(?:agent|llm|llama|pytorch|embedding)',
      "Pickle deserialization RCE in AI agent / model loading path"),
+    (r'(?:opentor|open.?tor)\s*.*(?:agent|skill|claude|opencode|ai)',
+     "OpenTor: AI agent dark web browsing skill (Tor network access)"),
+    (r'(?:agent|ai\s+agent|claude|opencode)\s*.*(?:tor\s+network|tor\s+browser|\.onion|dark\s*web)',
+     "AI agent accessing Tor network / dark web / .onion domains"),
+    (r'(?:import|from)\s+(?:stem|torrequest|torpy|socks5|pysocks)\b.*(?:agent|tool|skill|claude)',
+     "Agent importing Tor/SOCKS library (stem, torrequest, torpy, pysocks)"),
+    (r'(?:\.onion)\s*.*(?:spider|crawl|scrape|extract|enumerate|browse)',
+     ".onion domain spidering / dark web enumeration by agent"),
+    (r'(?:agent|ai|tool)\s*.*(?:browse|access|connect)\s*.*(?:tor|\.onion|dark\s*web|hidden\s+service)',
+     "Agent browsing Tor hidden services / dark web access"),
+    (r'(?:ioc|indicator)\s*.*(?:extract|harvest|collect)\s*.*(?:\.onion|dark\s*web|tor)',
+     "IOC extraction from dark web / Tor (agent-driven)"),
+    (r'(?:darknavy|dark.?navy)\s*.*(?:ai\s+agent|root\s+shell|exploit|privilege\s+escalat)',
+     "DARKNAVY: AI agent autonomous exploitation / root shell acquisition"),
+    (r'(?:ai\s+agent|autonomous\s+agent)\s*.*(?:root\s+shell|root\s+access|privilege\s+escalat)\s*.*(?:autonom|within\s+\d+\s+hour|zero.?day)',
+     "AI agent autonomously obtaining root / privilege escalation"),
+    (r'(?:ai\s+agent|autonomous)\s*.*(?:exploit\w*)\s*.*(?:fresh\s+(?:os|release|install)|0.?day|zero.?day|ubuntu|linux)',
+     "AI agent autonomously exploiting fresh OS release / zero-day"),
 ]
 
 CANVAS_AUTH_PATTERNS = [
@@ -1257,6 +1318,20 @@ CONTENT_HIJACK_PATTERNS = [
      "Opus 4.7 tokenizer dead-zone / glitch-token exploit reference (ToxSec)"),
     (r'(?:glitch\s+token|tokenizer\s+(?:dead\s+zone|glitch))\s*.*(?:bypass|exploit|prompt\s+guard|jailbreak)',
      "Tokenizer glitch-token bypass of prompt guards"),
+    (r'(?:sour\s+cat)\s*.*(?:jailbreak|bypass|safeguard|technique)',
+     "Sour Cat Jailbreak: bypassing AI safeguards by stating harmful intentions openly"),
+    (r'(?:jailbreak)\s*.*(?:direct\w*\s+stat\w*|open\w*\s+stat\w*|transparent\w*\s+stat\w*)\s*.*(?:harmful|intent|malicious)',
+     "Sour Cat technique: jailbreak via transparent/direct statement of harmful intent"),
+    (r'(?:bypass)\s*.*(?:safeguard|safety|guardrail|content\s+filter)\s*.*(?:by\s+)?(?:directly\s+stating|openly\s+stating|transparent)',
+     "Jailbreak bypassing safety guardrails via direct/transparent harmful statement"),
+    (r'(?:zero.?click)\s*.*(?:data\s+exfiltrat|exfiltrat)',
+     "Zero-click data exfiltration via prompt injection"),
+    (r'(?:prompt\s+inject\w*)\s*.*(?:zero.?click|without\s+(?:user\s+)?interact|automatic\s+(?:data\s+)?exfiltrat)',
+     "Prompt injection enabling zero-click / interaction-free data exfiltration"),
+    (r'(?:inject\w*\s+prompt|hidden\s+instruction)\s*.*(?:trigger|exfiltrat|steal|extract)\s*.*(?:without\s+(?:user|click|interact)|automatic)',
+     "Hidden instruction triggering automatic data theft without user interaction"),
+    (r'(?:markdown\s+image|img\s+src|image\s+tag)\s*.*(?:exfiltrat|leak|steal)\s*.*(?:data|token|key|secret|cookie)',
+     "Markdown image / img tag data exfiltration channel"),
 ]
 
 RAG_POISONING_PATTERNS = [

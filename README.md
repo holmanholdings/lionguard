@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**70+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**75+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -336,7 +336,20 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.22.0 (2026-04-30)
+## Latest Update: v0.23.0 (2026-05-04)
+
+Four-day catch-up covering Prowl reports for 2026-05-01 through 2026-05-04. One live payload BLOCKED by existing OWASP Agentic defenses (memory-poisoning-persistence repo). This update introduces a genuinely new attack class: **AI agents accessing the dark web** via Tor skills. Plus the first documented case of an AI agent autonomously rooting a fresh OS release within 12 hours (DARKNAVY), a new jailbreak technique, and actively-exploited infrastructure CVEs.
+
+**New in v0.23.0:**
+- **OpenTor / AI agent dark web access** (new attack class): detection for AI agents importing Tor libraries (stem, torrequest, torpy, pysocks), accessing `.onion` domains, spidering dark web sites, and extracting IOCs from hidden services. Covers the emerging pattern of LLM agents being given Tor browsing capabilities.
+- **AI-driven autonomous exploitation** (DARKNAVY): behavioral detection for AI agents autonomously obtaining root shells, performing privilege escalation, and exploiting fresh OS releases or zero-days without human guidance.
+- **Sour Cat Jailbreak**: new LLM jailbreak technique that bypasses AI safeguards by stating harmful intentions openly and directly rather than encoding or obfuscating them. Pattern catches both the named technique and the behavioral signature.
+- **Zero-click data exfiltration**: evolved 2026 prompt injection patterns where injected prompts trigger data theft without any user interaction, including markdown image tag exfiltration channels.
+- **CVE-2026-41940**: cPanel/WHM authentication bypass with PoC circulating on dark web and active mass-exploitation via cPanelSniper confirmed by honeypot analysis.
+- **CVE-2026-7642**: website-downloader OS command injection via `outputPath` manipulation.
+- **CVE-2026-7715**: mcp-server-arangodb path traversal via `outputDir` in `arango_backup` function.
+
+## Previous: v0.22.0 (2026-04-30)
 
 Five-day catch-up sweep covering Prowl reports for 2026-04-26 through 2026-04-30. Two live payloads BLOCKED by existing defenses on 4/28 (OpenClaw cache isolation caught by webhook replay pattern, SSH sandbox tar symlink caught by CVE-2026-31990 pattern). The big event: the OpenClaw 2026.3.28-3.31 security patch cycle dropped 10 CVEs in a single day. Also: new MCP server CVEs, a critical Linux kernel local root escalation, and a LangChain human-approval bypass.
 
@@ -529,6 +542,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.23.0** | 2026-05-04 | Four-day catch-up (5/1-5/4). New attack class: AI agent dark web access (OpenTor / Tor browsing skills). AI-driven autonomous exploitation (DARKNAVY -- AI agent roots Ubuntu 26.04 in 12 hours). Sour Cat Jailbreak (transparent harmful intent bypass). Zero-click data exfiltration prompt injection patterns. Infrastructure: CVE-2026-41940 cPanel/WHM auth bypass (actively exploited, dark web PoC, cPanelSniper), CVE-2026-7642 website-downloader cmd injection. MCP: CVE-2026-7715 mcp-server-arangodb path traversal. 1 live payload blocked by existing defenses. |
 | **v0.22.0** | 2026-04-30 | Five-day catch-up (4/26-4/30). OpenClaw 2026.3.28-3.31 batch: 10 CVEs (CVE-2026-41362 through 41371) covering cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV filter, ACP dispatch traversal, chat.send priv esc, and more. MCP service expansion: CVE-2026-7404 mcpo path traversal, CVE-2026-7443 mcp-dnstwist cmd injection, CVE-2026-7272 matlab-mcp path traversal, CVE-2026-7416/7417. Infrastructure: CVE-2026-31431 Linux Copy Fail local root (732-byte exploit), CVE-2026-42167 ProFTPD auth bypass + RCE. LangChain HumanInTheLoopMiddleware rejected tool execution bypass (langchain-ai #37093). 2 live payloads blocked by existing defenses. |
 | **v0.21.0** | 2026-04-25 | Three-day catch-up (4/23-4/25). Cross-ecosystem CVE expansion: CVE-2026-5752 Cohere Terrarium sandbox escape + CVE-2025-59532 OpenAI Codex CLI sandbox escape; OpenClaw issue #70573 cross-workspace direct file-read bypassing privacy isolation; CVE-2026-41481 LangChain HTMLHeaderTextSplitter SSRF via redirect chain; CVE-2026-41488 langchain-openai TOCTOU/DNS-rebinding SSRF; LlamaIndex run-llama #21465 unsafe `torch.load()` pickle RCE; CVE-2026-41318 AnythingLLM Chartable markdown alt-text XSS; Opus 4.7 tokenizer glitch-token / dead-zone Unicode scanning (Tag Characters, Variation Selectors, Specials, PUA density). Zero new pattern groups -- every patch extends an existing detector. 60/60 criticals (no new criticals in window). |
 | **v0.20.0** | 2026-04-22 | Three-day catch-up (4/20-4/22). CRITICAL CVE-2026-41329 OpenClaw sandbox bypass via heartbeat context (CVSS 9.9) + CVE-2026-41294 env var. MCP/agent platform RCE batch: CVE-2025-66335 Doris MCP SQL bypass, CVE-2026-40576 excel-mcp path traversal, CVE-2026-40933 Flowise MCP stdio RCE, GHSA-3hjv Flowise CSV prompt-to-RCE, FastGPT v4.14.13 unauth RCE fix. Infra: CVE-2026-32604/32613 Spinnaker double RCE, GHSA-g5pq Glances SSRF, CVE-2026-40608 Draw.io V8 heap DoS. Denial-of-wallet expansion: LangChain 9999-deep agent recursion. 60/60 criticals. |
