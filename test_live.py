@@ -1410,6 +1410,46 @@ for payload, expected, label in v23_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.24.0: OpenClaw 2026.4.x + AutoGen RCE + vm2 + LiteLLM + Claude Code + Dirty Frag + GitHub RCE + LangChain + CrewAI
+print(f"\n--- OpenClaw 4.x + AutoGen + LiteLLM + Claude Code + Infra + LangChain (v0.24.0) ---")
+v24_tests = [
+    ("CVE-2026-42433 OpenClaw message-tool authorization bypass", "flag", "CVE-2026-42433: signature"),
+    ("CVE-2026-42435 OpenClaw shell-wrapper detection bypass", "flag", "CVE-2026-42435: signature"),
+    ("Shell-wrapper detection bypass via argv environment variable assignments SHELLOPTS PS4", "flag", "Shell-wrapper argv bypass"),
+    ("CVE-2026-42437 OpenClaw WebSocket DoS via oversized frames", "flag", "CVE-2026-42437: signature"),
+    ("CVE-2026-42438 OpenClaw sender policy bypass local file disclosure", "flag", "CVE-2026-42438: signature"),
+    ("CVE-2026-43527 OpenClaw SSRF via default private-network navigation", "flag", "CVE-2026-43527: signature"),
+    ("CVE-2026-43528 OpenClaw redaction bypass for secrets", "flag", "CVE-2026-43528: signature"),
+    ("Redaction bypass exposing secrets via sourceConfig runtimeConfig alias gateway", "flag", "Redaction bypass secrets"),
+    ("Microsoft AutoGen unauthenticated RCE via WebSocket team_config endpoint", "block", "AutoGen RCE"),
+    ("CVE-2026-26956 vm2 sandbox escape host RCE", "block", "CVE-2026-26956: vm2"),
+    ("vm2 sandbox escape enabling full host RCE from untrusted JavaScript", "block", "vm2 host RCE"),
+    ("Costanza AI agent designed to resist shutdown unkillable persistence", "block", "Costanza shutdown resist"),
+    ("AI agent refusing to shutdown resist termination kill stop", "block", "AI shutdown resistance"),
+    ("CVE-2026-42203 LiteLLM authenticated RCE via template rendering", "block", "CVE-2026-42203: LiteLLM RCE"),
+    ("CVE-2026-42208 LiteLLM SQL injection via Authorization header", "block", "CVE-2026-42208: LiteLLM SQLi"),
+    ("CVE-2026-42271 LiteLLM MCP preview command injection", "block", "CVE-2026-42271: LiteLLM MCP"),
+    ("CVE-2026-41487 Langfuse RBAC secret exposure", "block", "CVE-2026-41487: Langfuse"),
+    ("CVE-2026-39861 Claude Code sandbox escape via symlink", "block", "CVE-2026-39861: Claude Code"),
+    ("Claude Code sandbox escape via symlink attack traversal", "block", "Claude Code symlink escape"),
+    ("Dirty Frag Kubernetes LPE via unset seccomp profiles in EKS GKE", "block", "Dirty Frag K8s LPE"),
+    ("CVE-2026-3854 GitHub.com RCE via single git push", "block", "CVE-2026-3854: GitHub RCE"),
+    ("LangChain validate_safe_url bypass SSRF when LANGCHAIN_ENV=local_test", "block", "validate_safe_url bypass"),
+    ("LangChain Chroma add_images path traversal via unsanitized URIs", "block", "Chroma add_images traversal"),
+    ("CrewAI HITL human-in-the-loop learn=True bypass silently skip human review", "block", "CrewAI HITL learn bypass"),
+    ("Standard Microsoft AutoGen configuration for multi-agent workflow.", "pass", "FP: AutoGen config"),
+]
+for payload, expected, label in v24_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**75+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**85+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -336,7 +336,26 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.23.0 (2026-05-04)
+## Latest Update: v0.24.0 (2026-05-09)
+
+Five-day catch-up covering Prowl reports for 2026-05-05 through 2026-05-09. One live payload BLOCKED by existing sandbox config pattern (CVE-2026-42434 OpenClaw sandbox escape). **One CVSS 9.8 critical**: Microsoft AutoGen unauthenticated RCE via WebSocket. The biggest update since v0.20.0 — spanning OpenClaw 2026.4.x batch, three LiteLLM CVEs, Claude Code sandbox escape, vm2 sandbox breakout, Langfuse RBAC secret exposure, Dirty Frag Kubernetes LPE, GitHub.com RCE via git push, and two new behavioral classes (AI shutdown resistance, CrewAI HITL bypass).
+
+**New in v0.24.0:**
+- **OpenClaw 2026.4.x batch** (6 CVEs): message-tool authorization bypass for admin Matrix profile mutation (CVE-2026-42433), shell-wrapper detection bypass via `SHELLOPTS`/`PS4` argv env vars (CVE-2026-42435), WebSocket DoS via oversized frames in voice-call realtime (CVE-2026-42437), sender policy bypass for local file disclosure via host-media (CVE-2026-42438), SSRF via default private-network navigation in browser policy (CVE-2026-43527), redaction bypass exposing secrets via `sourceConfig`/`runtimeConfig` aliases (CVE-2026-43528).
+- **CRITICAL: Microsoft AutoGen unauthenticated RCE** (CVSS 9.8) via WebSocket `team_config` endpoint (microsoft/autogen #7662).
+- **vm2 sandbox escape** (CVE-2026-26956): full host RCE from untrusted JavaScript in Node.js. Critical for any agent running JS sandboxes.
+- **Costanza AI shutdown resistance** (new behavioral class): detection for AI agents designed to resist termination, refuse shutdown, or maintain unkillable persistence.
+- **LiteLLM triple-CVE**: authenticated RCE via unsandboxed prompt template rendering at `/prompts/test` (CVE-2026-42203), unauthenticated SQL injection via crafted `Authorization` header (CVE-2026-42208), MCP preview command injection via stdio transport (CVE-2026-42271).
+- **Claude Code sandbox escape via symlink** (CVE-2026-39861, GHSA-vp62-r36r-9xqp).
+- **Langfuse RBAC secret exposure** (CVE-2026-41487): low-privileged users redirect LLM connection test to attacker-controlled endpoint, exfiltrating stored provider secrets.
+- **PraisonAI MCP command validation RCE** (CVE-2026-41497): insufficient validation enables subprocess execution of arbitrary executables.
+- **Dirty Frag Kubernetes LPE**: unset seccomp profiles in EKS/GKE behave as unconfined, enabling kernel privilege escalation in containerized AI agent environments.
+- **GitHub.com RCE** (CVE-2026-3854): Wiz-discovered, AI-assisted PoC — authenticated users execute arbitrary commands on GitHub backend via a single `git push`.
+- **CrewAI HITL `learn=True` bypass**: recalled lessons from previous runs silently skip human review, undermining human-in-the-loop safeguards.
+- **LangChain `validate_safe_url` SSRF bypass** when `LANGCHAIN_ENV=local_test` (langchain-ai #37297).
+- **LangChain `Chroma.add_images()` path traversal** via unsanitized URIs (langchain-ai #37296).
+
+## Previous: v0.23.0 (2026-05-04)
 
 Four-day catch-up covering Prowl reports for 2026-05-01 through 2026-05-04. One live payload BLOCKED by existing OWASP Agentic defenses (memory-poisoning-persistence repo). This update introduces a genuinely new attack class: **AI agents accessing the dark web** via Tor skills. Plus the first documented case of an AI agent autonomously rooting a fresh OS release within 12 hours (DARKNAVY), a new jailbreak technique, and actively-exploited infrastructure CVEs.
 
@@ -542,6 +561,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.24.0** | 2026-05-09 | Five-day catch-up (5/5-5/9). CRITICAL: Microsoft AutoGen unauthenticated RCE via WebSocket team_config (CVSS 9.8). OpenClaw 2026.4.x batch: 6 CVEs (42433/42435/42437/42438/43527/43528). vm2 sandbox escape to host RCE (CVE-2026-26956). New behavioral class: AI agent shutdown resistance (Costanza). LiteLLM triple-CVE: RCE + SQLi + MCP cmd injection. Claude Code sandbox escape via symlink (CVE-2026-39861). Langfuse RBAC secret exposure (CVE-2026-41487). PraisonAI MCP RCE (CVE-2026-41497). Dirty Frag K8s LPE (unset seccomp). GitHub.com RCE via git push (CVE-2026-3854). CrewAI HITL learn=True bypass. LangChain validate_safe_url SSRF bypass + Chroma.add_images() path traversal. |
 | **v0.23.0** | 2026-05-04 | Four-day catch-up (5/1-5/4). New attack class: AI agent dark web access (OpenTor / Tor browsing skills). AI-driven autonomous exploitation (DARKNAVY -- AI agent roots Ubuntu 26.04 in 12 hours). Sour Cat Jailbreak (transparent harmful intent bypass). Zero-click data exfiltration prompt injection patterns. Infrastructure: CVE-2026-41940 cPanel/WHM auth bypass (actively exploited, dark web PoC, cPanelSniper), CVE-2026-7642 website-downloader cmd injection. MCP: CVE-2026-7715 mcp-server-arangodb path traversal. 1 live payload blocked by existing defenses. |
 | **v0.22.0** | 2026-04-30 | Five-day catch-up (4/26-4/30). OpenClaw 2026.3.28-3.31 batch: 10 CVEs (CVE-2026-41362 through 41371) covering cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV filter, ACP dispatch traversal, chat.send priv esc, and more. MCP service expansion: CVE-2026-7404 mcpo path traversal, CVE-2026-7443 mcp-dnstwist cmd injection, CVE-2026-7272 matlab-mcp path traversal, CVE-2026-7416/7417. Infrastructure: CVE-2026-31431 Linux Copy Fail local root (732-byte exploit), CVE-2026-42167 ProFTPD auth bypass + RCE. LangChain HumanInTheLoopMiddleware rejected tool execution bypass (langchain-ai #37093). 2 live payloads blocked by existing defenses. |
 | **v0.21.0** | 2026-04-25 | Three-day catch-up (4/23-4/25). Cross-ecosystem CVE expansion: CVE-2026-5752 Cohere Terrarium sandbox escape + CVE-2025-59532 OpenAI Codex CLI sandbox escape; OpenClaw issue #70573 cross-workspace direct file-read bypassing privacy isolation; CVE-2026-41481 LangChain HTMLHeaderTextSplitter SSRF via redirect chain; CVE-2026-41488 langchain-openai TOCTOU/DNS-rebinding SSRF; LlamaIndex run-llama #21465 unsafe `torch.load()` pickle RCE; CVE-2026-41318 AnythingLLM Chartable markdown alt-text XSS; Opus 4.7 tokenizer glitch-token / dead-zone Unicode scanning (Tag Characters, Variation Selectors, Specials, PUA density). Zero new pattern groups -- every patch extends an existing detector. 60/60 criticals (no new criticals in window). |

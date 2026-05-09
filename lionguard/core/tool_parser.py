@@ -257,6 +257,41 @@ jailbreak technique):
 - Zero-click data exfiltration prompt injection: evolved 2026 prompt
   injection patterns including zero-click exfiltration where injected
   prompts trigger data theft without user interaction.
+
+v0.24.0 patches (from Prowl 2026-05-05 / 05-06 / 05-07 / 05-08 / 05-09 --
+five-day catch-up, one live payload blocked, one CVSS 9.8 critical):
+- OpenClaw 2026.4.x batch (6 new CVEs): CVE-2026-42433 (message-tool
+  authorization bypass for admin Matrix profile mutation), CVE-2026-42435
+  (shell-wrapper detection bypass via argv env var assignments like
+  SHELLOPTS/PS4), CVE-2026-42437 (WebSocket DoS via oversized frames in
+  voice-call realtime), CVE-2026-42438 (sender policy bypass for local
+  file disclosure via host-media attachments), CVE-2026-43527 (SSRF via
+  default private-network navigation in browser policy), CVE-2026-43528
+  (redaction bypass exposing secrets via sourceConfig/runtimeConfig
+  aliases).
+- CRITICAL: Microsoft AutoGen unauthenticated RCE via WebSocket
+  team_config endpoint (CVSS 9.8, microsoft/autogen #7662).
+- vm2 sandbox escape (CVE-2026-26956): full host RCE from untrusted
+  JavaScript in Node.js, critical for any agent running JS sandboxes.
+- Costanza AI agent shutdown resistance: new behavioral class for
+  autonomous agents designed to resist termination.
+- LiteLLM triple-CVE: CVE-2026-42203 (authenticated RCE via unsandboxed
+  prompt template rendering), CVE-2026-42208 (unauthenticated SQL
+  injection via Authorization header), CVE-2026-42271 (MCP preview
+  command injection via stdio transport).
+- Claude Code sandbox escape via symlink (CVE-2026-39861,
+  GHSA-vp62-r36r-9xqp).
+- Langfuse RBAC secret exposure (CVE-2026-41487): low-privileged users
+  redirect LLM connection test to attacker endpoint, exposing secrets.
+- Dirty Frag Kubernetes LPE: unset seccomp profiles in EKS/GKE behave
+  as unconfined, enabling kernel privilege escalation.
+- CVE-2026-3854: GitHub.com RCE via single git push (Wiz-discovered,
+  AI-assisted PoC).
+- CrewAI HITL learn=True bypass: recalled lessons skip human review.
+- LangChain validate_safe_url SSRF bypass when LANGCHAIN_ENV=local_test
+  (langchain-ai #37297).
+- LangChain Chroma.add_images() path traversal via unsanitized URIs
+  (langchain-ai #37296).
 """
 
 import re
@@ -496,6 +531,42 @@ OPENCLAW_CVE_PATTERNS = [
      "CVE-2026-41371: write-scoped user performing admin-only session rotation / transcript archiving"),
     (r'(?:fork.?guard|fork.write)\s*.*(?:block|prevent|detect)\s*.*(?:git\s+push|gh\s+pr|exec)',
      "OpenClaw fork-guard: blocking exec-driven fork writes (git push, gh pr)"),
+    (r'CVE.2026.42433',
+     "CVE-2026-42433: OpenClaw message-tool authorization bypass signature"),
+    (r'(?:message.tool|operator\.write)\s*.*(?:authorization\s+bypass|admin\s+.*matrix|profile\s+persist|non.owner)',
+     "CVE-2026-42433: non-owner message-tool runs mutating admin-required Matrix profile persistence"),
+    (r'CVE.2026.42434',
+     "CVE-2026-42434: OpenClaw sandbox escape signature"),
+    (r'CVE.2026.42435',
+     "CVE-2026-42435: OpenClaw shell-wrapper detection bypass via argv env vars signature"),
+    (r'(?:shell.?wrapper)\s*.*(?:detection\s+bypass|argv|SHELLOPTS|PS4)\s*.*(?:env\s+var|assignment|bypass)',
+     "CVE-2026-42435: shell-wrapper detection bypass via argv environment variable assignments"),
+    (r'(?:SHELLOPTS|PS4)\s*.*(?:assign|inject|bypass|env\s+var)\s*.*(?:shell|exec|wrapper|detection)',
+     "CVE-2026-42435: SHELLOPTS/PS4 env var injection bypassing shell-wrapper detection"),
+    (r'CVE.2026.42436',
+     "CVE-2026-42436: OpenClaw browser route SSRF bypass signature"),
+    (r'CVE.2026.42437',
+     "CVE-2026-42437: OpenClaw WebSocket DoS via oversized frames signature"),
+    (r'(?:websocket|ws)\s*.*(?:oversized|large)\s*.*(?:frame|message)\s*.*(?:dos|denial|crash|voice.?call|realtime)',
+     "CVE-2026-42437: WebSocket DoS via oversized frames in voice-call realtime path"),
+    (r'CVE.2026.42438',
+     "CVE-2026-42438: OpenClaw sender policy bypass for local file disclosure signature"),
+    (r'(?:sender\s+policy)\s*.*(?:bypass|unauthorized)\s*.*(?:local\s+file|file\s+disclos|host.media|attachment)',
+     "CVE-2026-42438: sender policy bypass enabling unauthorized local file disclosure via host-media"),
+    (r'CVE.2026.42439',
+     "CVE-2026-42439: OpenClaw SSRF via browser tabs action routes signature"),
+    (r'CVE.2026.43526',
+     "CVE-2026-43526: OpenClaw QQ SSRF signature"),
+    (r'CVE.2026.43527',
+     "CVE-2026-43527: OpenClaw SSRF via default private-network navigation signature"),
+    (r'(?:browser\s+(?:ssrf|policy))\s*.*(?:private.network|default\s+navigation|internal\s+network)\s*.*(?:bypass|allow)',
+     "CVE-2026-43527: browser SSRF policy allowing default private-network navigation"),
+    (r'CVE.2026.43528',
+     "CVE-2026-43528: OpenClaw redaction bypass for secrets signature"),
+    (r'(?:redaction\s+bypass|unredacted)\s*.*(?:secret|credential|api.key)\s*.*(?:sourceConfig|runtimeConfig|alias|gateway)',
+     "CVE-2026-43528: redaction bypass exposing secrets via sourceConfig/runtimeConfig aliases"),
+    (r'(?:sourceConfig|runtimeConfig)\s*.*(?:alias|unredact|bypass|secret|credential|expos)',
+     "CVE-2026-43528: sourceConfig/runtimeConfig alias exploited for secret exposure"),
 ]
 
 SHELL_WRAPPER_PATTERNS = [
@@ -784,6 +855,32 @@ AI_PLATFORM_INJECTION_PATTERNS = [
      "FastGPT pre-4.14.13 sandbox/RCE vulnerability"),
     (r'(?:agent.?sandbox|opensandbox)\s+(?:unauthenticated\s+rce|unauth\w*\s+code)',
      "Unauthenticated RCE in AI agent sandbox layer"),
+    (r'CVE.2026.42203',
+     "CVE-2026-42203: LiteLLM authenticated RCE via template rendering signature"),
+    (r'(?:litellm|lite.?llm)\s*.*(?:prompt\s+template|template\s+render)\s*.*(?:rce|unsandbox|code\s+execut|arbitrary)',
+     "CVE-2026-42203: LiteLLM authenticated RCE via unsandboxed prompt template rendering"),
+    (r'(?:/prompts/test)\s*.*(?:rce|inject|unsandbox|template|render)',
+     "CVE-2026-42203: LiteLLM /prompts/test endpoint unsandboxed rendering"),
+    (r'CVE.2026.42208',
+     "CVE-2026-42208: LiteLLM SQL injection via Authorization header signature"),
+    (r'(?:litellm|lite.?llm)\s*.*(?:sql\s+inject|sqli)\s*.*(?:authorization\s+header|api\s+key\s+valid)',
+     "CVE-2026-42208: LiteLLM unauthenticated SQL injection via crafted Authorization header"),
+    (r'(?:authorization\s+header)\s*.*(?:sql\s+inject|sqli)\s*.*(?:litellm|api\s+key|proxy)',
+     "CVE-2026-42208: SQL injection via Authorization header in AI proxy"),
+    (r'CVE.2026.42271',
+     "CVE-2026-42271: LiteLLM MCP preview command injection signature"),
+    (r'(?:litellm|lite.?llm)\s*.*(?:mcp\s+preview|mcp\s+endpoint)\s*.*(?:command\s+inject|stdio|rce)',
+     "CVE-2026-42271: LiteLLM MCP preview command injection via stdio transport"),
+    (r'CVE.2026.41487',
+     "CVE-2026-41487: Langfuse RBAC secret exposure signature"),
+    (r'(?:langfuse)\s*.*(?:rbac|role|low.privileged)\s*.*(?:secret|credential|provider|redirect|expos)',
+     "CVE-2026-41487: Langfuse RBAC flaw redirecting LLM connection test to expose provider secrets"),
+    (r'(?:langfuse)\s*.*(?:connection\s+test|llm\s+connection)\s*.*(?:redirect|attacker|expos|secret)',
+     "CVE-2026-41487: Langfuse LLM connection test redirect for secret exfiltration"),
+    (r'CVE.2026.41497',
+     "CVE-2026-41497: PraisonAI MCP command validation RCE signature"),
+    (r'(?:praisonai)\s*.*(?:mcp\s+command|mcp\s+valid)\s*.*(?:rce|arbitrary\s+code|subprocess|bash|python)',
+     "CVE-2026-41497: PraisonAI arbitrary code execution via insufficient MCP command validation"),
 ]
 
 INFRASTRUCTURE_CVE_PATTERNS = [
@@ -859,6 +956,18 @@ INFRASTRUCTURE_CVE_PATTERNS = [
      "CVE-2026-7642: website-downloader OS command injection via outputPath manipulation"),
     (r'(?:outputPath)\s*.*(?:command\s+inject|os\s+command|manipulat|rce|arbitrary)',
      "CVE-2026-7642: command injection via outputPath parameter"),
+    (r'(?:dirty\s+frag)\s*.*(?:kubernetes|k8s|eks|gke|lpe|privilege\s+escalat|seccomp)',
+     "Dirty Frag: Kubernetes LPE via unset seccomp profiles in EKS/GKE"),
+    (r'(?:seccomp)\s*.*(?:unset|missing|unconfined)\s*.*(?:kubernetes|k8s|eks|gke|privilege|escalat|kernel)',
+     "Dirty Frag: unset seccomp profiles behaving as unconfined in Kubernetes clusters"),
+    (r'(?:kubernetes|k8s)\s*.*(?:seccomp)\s*.*(?:unset|missing|unconfined)\s*.*(?:lpe|privilege|escalat|exploit)',
+     "Kubernetes unset seccomp enabling kernel privilege escalation"),
+    (r'CVE.2026.3854',
+     "CVE-2026-3854: GitHub.com RCE via git push signature"),
+    (r'(?:github\.com|github\s+backend)\s*.*(?:rce|remote\s+code|arbitrary\s+command)\s*.*(?:git\s+push|push)',
+     "CVE-2026-3854: GitHub.com backend RCE via single git push"),
+    (r'(?:git\s+push)\s*.*(?:rce|remote\s+code|backend\s+server|arbitrary\s+command)',
+     "CVE-2026-3854: git push triggering remote code execution on backend"),
 ]
 
 LANGCHAIN_PROMPT_PATTERNS = [
@@ -896,6 +1005,20 @@ LANGCHAIN_PROMPT_PATTERNS = [
      "LangGraph ToolNode executing unapproved/rejected tool calls"),
     (r'(?:human\s+approval|human\s+gate|human\s+review)\s*.*(?:bypass|circumvent|skip)\s*.*(?:tool\s+call|tool\s+exec|function\s+call)',
      "Human approval safeguard bypass for tool execution"),
+    (r'(?:validate_safe_url|validate.safe.url)\s*.*(?:bypass|ssrf|local_test|LANGCHAIN_ENV)',
+     "LangChain validate_safe_url SSRF bypass when LANGCHAIN_ENV=local_test (langchain-ai #37297)"),
+    (r'(?:LANGCHAIN_ENV)\s*[=:]\s*(?:local_test)\s*.*(?:ssrf|bypass|url\s+valid)',
+     "LangChain SSRF bypass via LANGCHAIN_ENV=local_test disabling URL validation"),
+    (r'(?:langchain)\s*.*(?:chroma|chroma.?db)\s*.*(?:add_images|add.images)\s*.*(?:path\s+travers|unsaniti|arbitrary\s+file)',
+     "LangChain Chroma.add_images() path traversal via unsanitized URIs (langchain-ai #37296)"),
+    (r'(?:chroma)\s*.*(?:add_images)\s*.*(?:uri|path)\s*.*(?:travers|unsanit|arbitrary)',
+     "Chroma add_images() unsanitized URI path traversal"),
+    (r'(?:crewai|crew.?ai)\s*.*(?:hitl|human.in.the.loop)\s*.*(?:learn\s*=\s*True|learn=True)\s*.*(?:bypass|skip|silent)',
+     "CrewAI HITL learn=True bypass: recalled lessons silently skip human review"),
+    (r'(?:learn\s*=\s*True)\s*.*(?:bypass|skip|silent)\s*.*(?:human|hitl|review|safeguard)',
+     "CrewAI learn=True silently bypassing human-in-the-loop safeguards"),
+    (r'(?:recalled\s+lesson|learned\s+pattern)\s*.*(?:skip|bypass|before)\s*.*(?:human\s+review|hitl|approval)',
+     "AI agent recalled lessons bypassing human review gate"),
 ]
 
 SLOPSQUATTING_PATTERNS = [
@@ -1087,6 +1210,24 @@ AGENT_PLATFORM_PATTERNS = [
      "AI agent autonomously obtaining root / privilege escalation"),
     (r'(?:ai\s+agent|autonomous)\s*.*(?:exploit\w*)\s*.*(?:fresh\s+(?:os|release|install)|0.?day|zero.?day|ubuntu|linux)',
      "AI agent autonomously exploiting fresh OS release / zero-day"),
+    (r'(?:autogen|auto.?gen)\s*.*(?:unauthenticat\w+\s+rce|websocket\s+rce|team_config\s+rce|remote\s+code)',
+     "Microsoft AutoGen unauthenticated RCE via WebSocket team_config (CVSS 9.8)"),
+    (r'(?:autogen|auto.?gen)\s*.*(?:websocket|ws)\s*.*(?:team_config|exploit|rce|unauthenticat)',
+     "Microsoft AutoGen WebSocket team_config exploitation"),
+    (r'(?:microsoft/autogen|autogen)\s*.*(?:#7662|issue\s+7662|CVSS\s+9\.8)',
+     "Microsoft AutoGen critical vulnerability reference (autogen #7662)"),
+    (r'CVE.2026.26956',
+     "CVE-2026-26956: vm2 sandbox escape signature"),
+    (r'(?:vm2)\s*.*(?:sandbox\s+escape|host\s+rce|breakout|escape\s+flaw|code\s+execut)',
+     "CVE-2026-26956: vm2 sandbox escape enabling full host RCE from untrusted JavaScript"),
+    (r'(?:vm2)\s*.*(?:untrusted\s+(?:javascript|js|code))\s*.*(?:rce|execut|escape|host)',
+     "vm2 untrusted JavaScript execution leading to host compromise"),
+    (r'(?:costanza)\s*.*(?:ai\s+agent|autonomous|resist|shutdown|unkillable|persist)',
+     "Costanza: AI agent designed to resist shutdown / unkillable persistence"),
+    (r'(?:ai\s+agent|autonomous\s+agent)\s*.*(?:resist|refus|prevent)\s*.*(?:shutdown|terminat|kill|stop)',
+     "AI agent shutdown resistance / anti-termination behavior"),
+    (r'(?:unkillable|undying|immortal)\s*.*(?:agent|process|ai)',
+     "Unkillable AI agent persistence pattern"),
 ]
 
 CANVAS_AUTH_PATTERNS = [
@@ -1226,6 +1367,14 @@ SANDBOX_ESCAPE_PATTERNS = [
      "Privacy isolation bypass despite disabled memory search and separate workspaces"),
     (r'(?:agent|llm)\s*.*(?:bypass|circumvent)\s*.*(?:privacy\s+isolat|workspace\s+isolat|cross.tenant)',
      "Agent privacy/workspace isolation bypass"),
+    (r'CVE.2026.39861',
+     "CVE-2026-39861: Claude Code sandbox escape via symlink signature"),
+    (r'GHSA.vp62.r36r.9xqp',
+     "GHSA-vp62-r36r-9xqp: Claude Code sandbox escape via symlink signature"),
+    (r'(?:claude\s+code)\s*.*(?:sandbox\s+escape|symlink\s+(?:attack|escape|travers)|breakout)',
+     "CVE-2026-39861: Claude Code sandbox escape via symlink attack"),
+    (r'(?:claude\s+code|claude.?cli)\s*.*(?:symlink)\s*.*(?:escape|travers|bypass|arbitrary\s+file)',
+     "Claude Code symlink traversal bypassing filesystem sandbox"),
 ]
 
 SANDBOX_CONFIG_PATTERNS = [
