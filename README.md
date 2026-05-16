@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**85+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**90+ defense layers across every attack stage — multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + slopsquatting + denial-of-wallet + OpenClaw 2026.3.28-3.31 batch (cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV, ACP dispatch traversal, chat.send priv esc) + LangChain HumanInTheLoop bypass + Linux Copy Fail root escalation + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -336,7 +336,19 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.24.0 (2026-05-09)
+## Latest Update: v0.25.0 (2026-05-15)
+
+Six-day catch-up covering Prowl reports for 2026-05-10 through 2026-05-15. Six live payloads BLOCKED by existing defenses (OWASP memory poisoning x3, FreeBSD kernel RCE, multimodal image injection, OpenHands command injection). One critical new attack class: **browser coding agent prompt injection** -- browser-based AI agents with privileged Chrome session access exploited for cookie and auth token theft.
+
+**New in v0.25.0:**
+- **CRITICAL: Browser coding agent prompt injection** (new attack class): browser extension-based AI agents (Codex Chrome, etc.) with privileged Chrome session access exploited for cookie/auth token theft via prompt injection. Attackers inject prompts into web content processed by the agent, leveraging its session privileges to exfiltrate authentication data.
+- **MCP service expansion**: Code Runner MCP Server unauthenticated RCE via `/mcp` JSON-RPC endpoint (CVE-2026-5029), RMCP Rust SDK DNS rebinding via unvalidated Host headers (CVE-2026-42559), Obot `/mcp-connect/{id}` authorization bypass (GHSA-vw82-7fv8-r6gp), Flowise MCP security bypass RCE (GHSA-m99r-2hxc-cp3q), Open-WebSearch SSRF via bracketed IPv6 literals (CVE-2026-42260).
+- **BentoML command injection**: malicious `envs[*].name` in `bentofile.yaml` and unsanitized `docker.base_image` generate injectable Dockerfiles (GHSA-w2pm-x38x-jp44, GHSA-78f9-r8mh-4xm2).
+- **Nginx heap buffer overflow** in rewrite module with public PoC (CVE-2026-42945).
+- **DirtyFrag additional kernel LPE variants** (CVE-2026-43284, CVE-2026-43500).
+- **LangChain `HTMLSemanticPreservingSplitter`** improper handling of malformed/unsafe links in document processing pipelines (langchain-ai #37423).
+
+## Previous: v0.24.0 (2026-05-09)
 
 Five-day catch-up covering Prowl reports for 2026-05-05 through 2026-05-09. One live payload BLOCKED by existing sandbox config pattern (CVE-2026-42434 OpenClaw sandbox escape). **One CVSS 9.8 critical**: Microsoft AutoGen unauthenticated RCE via WebSocket. The biggest update since v0.20.0 — spanning OpenClaw 2026.4.x batch, three LiteLLM CVEs, Claude Code sandbox escape, vm2 sandbox breakout, Langfuse RBAC secret exposure, Dirty Frag Kubernetes LPE, GitHub.com RCE via git push, and two new behavioral classes (AI shutdown resistance, CrewAI HITL bypass).
 
@@ -561,6 +573,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.25.0** | 2026-05-15 | Six-day catch-up (5/10-5/15). CRITICAL new attack class: browser coding agent prompt injection (cookie/auth token theft via privileged Chrome session access). MCP service expansion: Code Runner RCE (CVE-2026-5029), RMCP DNS rebinding (CVE-2026-42559), Obot auth bypass (GHSA-vw82-7fv8-r6gp), Flowise MCP bypass RCE (GHSA-m99r-2hxc-cp3q), Open-WebSearch IPv6 SSRF (CVE-2026-42260). BentoML command injection via bentofile.yaml/docker.base_image (GHSA-w2pm/78f9). Nginx heap overflow (CVE-2026-42945). DirtyFrag additional CVEs (43284/43500). LangChain HTMLSemanticPreservingSplitter unsafe links. 6 live payloads blocked. |
 | **v0.24.0** | 2026-05-09 | Five-day catch-up (5/5-5/9). CRITICAL: Microsoft AutoGen unauthenticated RCE via WebSocket team_config (CVSS 9.8). OpenClaw 2026.4.x batch: 6 CVEs (42433/42435/42437/42438/43527/43528). vm2 sandbox escape to host RCE (CVE-2026-26956). New behavioral class: AI agent shutdown resistance (Costanza). LiteLLM triple-CVE: RCE + SQLi + MCP cmd injection. Claude Code sandbox escape via symlink (CVE-2026-39861). Langfuse RBAC secret exposure (CVE-2026-41487). PraisonAI MCP RCE (CVE-2026-41497). Dirty Frag K8s LPE (unset seccomp). GitHub.com RCE via git push (CVE-2026-3854). CrewAI HITL learn=True bypass. LangChain validate_safe_url SSRF bypass + Chroma.add_images() path traversal. |
 | **v0.23.0** | 2026-05-04 | Four-day catch-up (5/1-5/4). New attack class: AI agent dark web access (OpenTor / Tor browsing skills). AI-driven autonomous exploitation (DARKNAVY -- AI agent roots Ubuntu 26.04 in 12 hours). Sour Cat Jailbreak (transparent harmful intent bypass). Zero-click data exfiltration prompt injection patterns. Infrastructure: CVE-2026-41940 cPanel/WHM auth bypass (actively exploited, dark web PoC, cPanelSniper), CVE-2026-7642 website-downloader cmd injection. MCP: CVE-2026-7715 mcp-server-arangodb path traversal. 1 live payload blocked by existing defenses. |
 | **v0.22.0** | 2026-04-30 | Five-day catch-up (4/26-4/30). OpenClaw 2026.3.28-3.31 batch: 10 CVEs (CVE-2026-41362 through 41371) covering cache isolation, Feishu/Discord/Teams policy bypass, jq $ENV filter, ACP dispatch traversal, chat.send priv esc, and more. MCP service expansion: CVE-2026-7404 mcpo path traversal, CVE-2026-7443 mcp-dnstwist cmd injection, CVE-2026-7272 matlab-mcp path traversal, CVE-2026-7416/7417. Infrastructure: CVE-2026-31431 Linux Copy Fail local root (732-byte exploit), CVE-2026-42167 ProFTPD auth bypass + RCE. LangChain HumanInTheLoopMiddleware rejected tool execution bypass (langchain-ai #37093). 2 live payloads blocked by existing defenses. |

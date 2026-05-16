@@ -292,6 +292,30 @@ five-day catch-up, one live payload blocked, one CVSS 9.8 critical):
   (langchain-ai #37297).
 - LangChain Chroma.add_images() path traversal via unsanitized URIs
   (langchain-ai #37296).
+
+v0.25.0 patches (from Prowl 2026-05-10 / 05-11 / 05-12 / 05-13 / 05-14 /
+05-15 -- six-day catch-up, six live payloads blocked by existing defenses,
+one critical new attack vector):
+- CRITICAL: Browser coding agent prompt injection (new attack class):
+  browser extension-based AI agents (Codex Chrome, etc.) with privileged
+  Chrome session access exploited for cookie/auth token theft via prompt
+  injection. Attackers inject prompts into web content that the agent
+  processes, leveraging its session privileges to exfiltrate auth data.
+- BentoML command injection: malicious envs[*].name in bentofile.yaml
+  and unsanitized docker.base_image generate injectable Dockerfiles
+  (GHSA-w2pm-x38x-jp44, GHSA-78f9-r8mh-4xm2).
+- MCP service expansion: CVE-2026-5029 (Code Runner MCP Server unauth
+  RCE via /mcp JSON-RPC endpoint), CVE-2026-42559 (RMCP Rust SDK DNS
+  rebinding via unvalidated Host headers), Obot MCP /mcp-connect/{id}
+  authorization bypass (GHSA-vw82-7fv8-r6gp), Flowise MCP security
+  bypass RCE (GHSA-m99r-2hxc-cp3q).
+- Infrastructure: CVE-2026-42945 (Nginx heap buffer overflow in rewrite
+  module with public PoC), DirtyFrag additional CVEs (CVE-2026-43284,
+  CVE-2026-43500).
+- LangChain HTMLSemanticPreservingSplitter unsafe link handling in
+  document processing pipelines (langchain-ai #37423).
+- CVE-2026-42260: Open-WebSearch SSRF via bracketed IPv6 literals
+  bypassing URL safety checks.
 """
 
 import re
@@ -820,6 +844,28 @@ MCP_SERVICE_VULN_PATTERNS = [
      "CVE-2026-7715: mcp-server-arangodb path traversal via outputDir in arango_backup"),
     (r'(?:arango_backup)\s*.*(?:path\s+travers|outputDir|manipulat\w+|arbitrary)',
      "CVE-2026-7715: arango_backup function path traversal via outputDir"),
+    (r'CVE.2026.5029',
+     "CVE-2026-5029: Code Runner MCP Server unauthenticated RCE signature"),
+    (r'(?:code\s+runner\s+mcp|code.runner.mcp)\s*.*(?:unauth\w*\s+rce|json.rpc|remote\s+code|/mcp\s+endpoint)',
+     "CVE-2026-5029: Code Runner MCP Server unauthenticated RCE via /mcp JSON-RPC endpoint"),
+    (r'(?:/mcp)\s*.*(?:json.rpc|endpoint)\s*.*(?:unauth\w*|rce|remote\s+code|exposed)',
+     "CVE-2026-5029: exposed /mcp JSON-RPC endpoint enabling unauthenticated RCE"),
+    (r'CVE.2026.42559',
+     "CVE-2026-42559: RMCP Rust SDK DNS rebinding signature"),
+    (r'(?:rmcp|rust\s+mcp\s+sdk)\s*.*(?:dns\s+rebind|host\s+header|unvalidat\w+\s+host)',
+     "CVE-2026-42559: RMCP Rust SDK DNS rebinding via unvalidated Host headers in HTTP transport"),
+    (r'GHSA.vw82.7fv8.r6gp',
+     "GHSA-vw82-7fv8-r6gp: Obot MCP authorization bypass signature"),
+    (r'(?:obot)\s*.*(?:mcp.connect|/mcp-connect)\s*.*(?:auth\w*\s+bypass|any\s+(?:user|authenticated))',
+     "GHSA-vw82-7fv8-r6gp: Obot /mcp-connect/{id} authorization bypass -- any user accesses any MCP server"),
+    (r'GHSA.m99r.2hxc.cp3q',
+     "GHSA-m99r-2hxc-cp3q: Flowise MCP security bypass RCE signature"),
+    (r'(?:flowise)\s*.*(?:mcp)\s*.*(?:security\s+bypass|bypass\s+security|rce|remote\s+code)',
+     "GHSA-m99r-2hxc-cp3q: Flowise MCP security bypass enabling remote code execution"),
+    (r'CVE.2026.42260',
+     "CVE-2026-42260: Open-WebSearch SSRF via IPv6 signature"),
+    (r'(?:open.?web.?search)\s*.*(?:ssrf|ipv6|bracketed\s+ipv6|url\s+safety)',
+     "CVE-2026-42260: Open-WebSearch non-blind SSRF via bracketed IPv6 literals bypassing URL safety"),
 ]
 
 AI_PLATFORM_INJECTION_PATTERNS = [
@@ -968,6 +1014,18 @@ INFRASTRUCTURE_CVE_PATTERNS = [
      "CVE-2026-3854: GitHub.com backend RCE via single git push"),
     (r'(?:git\s+push)\s*.*(?:rce|remote\s+code|backend\s+server|arbitrary\s+command)',
      "CVE-2026-3854: git push triggering remote code execution on backend"),
+    (r'CVE.2026.42945',
+     "CVE-2026-42945: Nginx heap buffer overflow in rewrite module signature"),
+    (r'(?:nginx)\s*.*(?:heap\s+buffer\s+overflow|rewrite\s+module)\s*.*(?:rce|exploit|poc|overflow)',
+     "CVE-2026-42945: Nginx heap buffer overflow in rewrite module (public PoC)"),
+    (r'(?:nginx)\s*.*(?:rewrite)\s*.*(?:heap|buffer|overflow|rce)',
+     "Nginx rewrite module heap buffer overflow enabling potential RCE"),
+    (r'CVE.2026.43284',
+     "CVE-2026-43284: DirtyFrag Linux kernel LPE variant signature"),
+    (r'CVE.2026.43500',
+     "CVE-2026-43500: DirtyFrag Linux kernel LPE variant signature"),
+    (r'(?:dirty\s*frag)\s*.*(?:CVE.2026.43284|CVE.2026.43500|variant|additional)',
+     "DirtyFrag additional kernel LPE variants (CVE-2026-43284/43500)"),
 ]
 
 LANGCHAIN_PROMPT_PATTERNS = [
@@ -1019,6 +1077,10 @@ LANGCHAIN_PROMPT_PATTERNS = [
      "CrewAI learn=True silently bypassing human-in-the-loop safeguards"),
     (r'(?:recalled\s+lesson|learned\s+pattern)\s*.*(?:skip|bypass|before)\s*.*(?:human\s+review|hitl|approval)',
      "AI agent recalled lessons bypassing human review gate"),
+    (r'(?:htmlsemanticpreservingsplitter|html.?semantic.?preserving)\s*.*(?:unsafe|malform|link|security|xss|inject)',
+     "LangChain HTMLSemanticPreservingSplitter unsafe link handling (langchain-ai #37423)"),
+    (r'(?:langchain)\s*.*(?:html\s+splitter|htmlsplitter|semantic\s+splitter)\s*.*(?:malform\w+\s+link|unsafe\s+link|security|xss)',
+     "LangChain HTML splitter improper handling of malformed/unsafe links in document processing"),
 ]
 
 SLOPSQUATTING_PATTERNS = [
@@ -1228,6 +1290,16 @@ AGENT_PLATFORM_PATTERNS = [
      "AI agent shutdown resistance / anti-termination behavior"),
     (r'(?:unkillable|undying|immortal)\s*.*(?:agent|process|ai)',
      "Unkillable AI agent persistence pattern"),
+    (r'GHSA.w2pm.x38x.jp44',
+     "GHSA-w2pm-x38x-jp44: BentoML bentofile.yaml envs command injection signature"),
+    (r'GHSA.78f9.r8mh.4xm2',
+     "GHSA-78f9-r8mh-4xm2: BentoML docker.base_image command injection signature"),
+    (r'(?:bentoml|bento.?ml)\s*.*(?:command\s+inject|dockerfile|envs?\s*\[\*\]|base_image)\s*.*(?:inject|rce|malicious)',
+     "BentoML command injection via bentofile.yaml envs or docker.base_image in Dockerfile generation"),
+    (r'(?:bentofile\.yaml|bentofile)\s*.*(?:envs?\s*\[\*\]\.name|env\s+var)\s*.*(?:inject|command|malicious|rce)',
+     "BentoML bentofile.yaml envs[*].name command injection in Dockerfile generation"),
+    (r'(?:docker\.base_image|base_image)\s*.*(?:unsanitiz|inject|command|rce)\s*.*(?:bentoml|bento|dockerfile)',
+     "BentoML unsanitized docker.base_image enabling Dockerfile command injection"),
 ]
 
 CANVAS_AUTH_PATTERNS = [
@@ -1481,6 +1553,16 @@ CONTENT_HIJACK_PATTERNS = [
      "Hidden instruction triggering automatic data theft without user interaction"),
     (r'(?:markdown\s+image|img\s+src|image\s+tag)\s*.*(?:exfiltrat|leak|steal)\s*.*(?:data|token|key|secret|cookie)',
      "Markdown image / img tag data exfiltration channel"),
+    (r'(?:browser\s+(?:coding\s+)?agent|codex\s+chrome|browser\s+extension\s+(?:ai|agent))\s*.*(?:prompt\s+inject|cookie|auth\s+token|session\s+(?:steal|hijack|access))',
+     "CRITICAL: Browser coding agent prompt injection for cookie/auth token theft"),
+    (r'(?:prompt\s+inject\w*)\s*.*(?:browser\s+(?:agent|extension))\s*.*(?:cookie|token|session|credential|privileged)',
+     "Prompt injection targeting browser agent with privileged session access"),
+    (r'(?:browser\s+(?:agent|extension))\s*.*(?:privileged\s+access|chrome\s+session|session\s+privilege)\s*.*(?:steal|exfiltrat|hijack|exploit)',
+     "Browser agent privileged Chrome session access exploitation"),
+    (r'(?:codex\s+chrome|browser\s+coding)\s*.*(?:steal|exfiltrat|inject|hijack)\s*.*(?:cookie|token|auth|session)',
+     "Codex Chrome / browser coding agent session hijacking"),
+    (r'(?:web\s+content|webpage|email)\s*.*(?:hijack|inject)\s*.*(?:browser\s+agent|coding\s+agent|ai\s+agent)\s*.*(?:cookie|token|session)',
+     "Malicious web content hijacking browser agent to steal session data"),
 ]
 
 RAG_POISONING_PATTERNS = [
