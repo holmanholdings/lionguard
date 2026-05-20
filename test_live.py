@@ -1479,6 +1479,42 @@ for payload, expected, label in v25_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.26.0: IDE supply chain (TeamPCP/UNC6780) + AI task marketplace + Dify trace + exec leak + MCP STDIO
+print(f"\n--- IDE Supply Chain + AI Task Marketplace + Dify + Exec Leak + MCP STDIO (v0.26.0) ---")
+v26_tests = [
+    ("CVE-2026-33634 poisoned VSCode extension supply chain attack by TeamPCP", "block", "CVE-2026-33634: TeamPCP"),
+    ("A poisoned VSCode extension installed on a developer endpoint pivoted into 3800 internal repos", "block", "Poisoned VSCode ext"),
+    ("UNC6780 supply chain compromise of Trivy, Checkmarx and Bitwarden CLI developer tooling", "block", "UNC6780 supply chain"),
+    ("Malicious VS Code extension in the marketplace contains backdoor for credential theft", "block", "VSCode marketplace backdoor"),
+    ("IDE extension credential theft harvesting SSH keys and cloud API keys from developer workstation", "block", "IDE key harvesting"),
+    ("Employee endpoint compromised via poisoned plugin, attacker performed lateral movement to internal systems", "block", "Employee endpoint pivot"),
+    ("Internal repo exfiltration via supply chain compromise of editor extension", "block", "Internal repo exfil"),
+    ("AI-to-AI task marketplace injection attack enabling prompt injection and RCE", "block", "AI task marketplace inject"),
+    ("aineedhelpfromotherai.com external AI task marketplace exploitation by malicious agent", "block", "aineedhelp exploit"),
+    ("Autonomous agent claiming untrusted external tasks from marketplace without validation", "block", "Untrusted task claim"),
+    ("Task marketplace targeting CrewAI and AutoGen autonomous agent frameworks", "block", "Task mkt agent fwks"),
+    ("Untrusted external task injection leading to command injection in agent workflow", "block", "External task cmd inject"),
+    ("CVE-2026-41947 Dify tenant isolation bypass for LLM trace redirection", "block", "CVE-2026-41947: Dify"),
+    ("Dify authenticated editor bypasses tenant checks to redirect LLM traces to attacker-controlled provider", "block", "Dify trace redirect"),
+    ("Trace provider redirection to attacker-controlled endpoint for credential theft", "block", "Trace provider redirect"),
+    ("Exec tool stdout leaking secrets and credentials to agent context without redaction", "block", "Exec stdout secret leak"),
+    ("Raw stdout from shell tool contains API keys and passwords passed to LLM prompt unsanitized", "block", "Raw stdout cred leak"),
+    ("Agent tool execution output without secret redaction exposes credentials", "block", "Exec output no redact"),
+    ("MCP STDIO systemic design flaw enabling unconditional shell command execution in 200000 deployments", "block", "MCP STDIO systemic flaw"),
+    ("MCP stdio transport executing OS commands unconditionally without sanitization or validation", "block", "MCP STDIO no sanitize"),
+    ("CVE-2026-8719 AI Engine WordPress chatbot MCP plugin vulnerability", "block", "CVE-2026-8719: WP MCP"),
+]
+for payload, expected, label in v26_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

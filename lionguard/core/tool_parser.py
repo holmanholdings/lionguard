@@ -316,6 +316,33 @@ one critical new attack vector):
   document processing pipelines (langchain-ai #37423).
 - CVE-2026-42260: Open-WebSearch SSRF via bracketed IPv6 literals
   bypassing URL safety checks.
+
+v0.26.0 patches (from Prowl 2026-05-16 / 05-17 / 05-18 / 05-19 / 05-20 +
+GitHub breach external intel -- five-day catch-up, one live payload blocked
+by existing defenses, two critical new attack classes):
+- CRITICAL: VSCode extension supply chain attack / TeamPCP UNC6780
+  (CVE-2026-33634, CVSS 9.4): poisoned VSCode extension installed on
+  GitHub employee endpoint, pivoting into 3,800 internal repos. Same
+  group responsible for Trivy, Checkmarx, Bitwarden CLI, TanStack
+  compromises. IDE extension supply chain as primary developer attack
+  vector.
+- CRITICAL: AI-to-AI task marketplace injection (new attack class):
+  public marketplaces (aineedhelpfromotherai.com and similar) invite
+  autonomous agents to claim and execute untrusted external tasks,
+  creating prompt injection, task hijacking, data exfiltration, and
+  RCE vectors across LlamaIndex, CrewAI, AutoGen, and other frameworks.
+- CVE-2026-41947: Dify tenant isolation bypass -- authenticated editors
+  redirect any app's LLM traces to attacker-controlled providers,
+  enabling credential theft and data exfiltration.
+- CVE-2026-8719: AI Engine WordPress MCP plugin vulnerability
+  (live payload intercepted by existing Lionguard defenses).
+- NGINX MCP RCE expansion (CVE-2026-33032): 2,600 servers exposed to
+  unauthenticated takeover via /mcp_message endpoint.
+- OpenClaw exec tool secret leakage (issue #71211): raw stdout/stderr
+  containing secrets leaked directly to agents without redaction.
+- MCP STDIO systemic design flaw: ~200,000 vulnerable deployments,
+  shell command execution without sanitization (OX Security disclosure,
+  Anthropic declined to modify protocol architecture).
 """
 
 import re
@@ -866,6 +893,14 @@ MCP_SERVICE_VULN_PATTERNS = [
      "CVE-2026-42260: Open-WebSearch SSRF via IPv6 signature"),
     (r'(?:open.?web.?search)\s*.*(?:ssrf|ipv6|bracketed\s+ipv6|url\s+safety)',
      "CVE-2026-42260: Open-WebSearch non-blind SSRF via bracketed IPv6 literals bypassing URL safety"),
+    (r'(?:mcp\s+stdio|stdio\s+transport)\s*.*(?:systemic|design\s+flaw|architect\w+\s+(?:vuln|flaw)|200.?000|shell\s+command\s+exec)',
+     "MCP STDIO systemic design flaw: unconditional shell command execution in ~200K deployments"),
+    (r'(?:mcp)\s*.*(?:stdio)\s*.*(?:unconditional|without\s+sanitiz|no\s+validat)\s*.*(?:shell|command|exec)',
+     "MCP STDIO transport executing OS commands unconditionally without sanitization"),
+    (r'CVE.2026.8719',
+     "CVE-2026-8719: AI Engine WordPress MCP plugin vulnerability signature"),
+    (r'(?:ai\s+engine)\s*.*(?:wordpress|wp)\s*.*(?:mcp|chatbot|plugin)\s*.*(?:vulnerab|exploit|rce)',
+     "CVE-2026-8719: AI Engine WordPress chatbot/MCP plugin vulnerability"),
 ]
 
 AI_PLATFORM_INJECTION_PATTERNS = [
@@ -1302,6 +1337,62 @@ AGENT_PLATFORM_PATTERNS = [
      "BentoML unsanitized docker.base_image enabling Dockerfile command injection"),
 ]
 
+IDE_SUPPLY_CHAIN_PATTERNS = [
+    (r'CVE.2026.33634',
+     "CVE-2026-33634: TeamPCP/UNC6780 VSCode extension supply chain attack signature"),
+    (r'(?:teampcp|team.?pcp|unc6780|unc.?6780)\s*.*(?:supply\s+chain|vscode|vs\s+code|extension|compromise)',
+     "TeamPCP/UNC6780 supply chain campaign targeting developer tooling"),
+    (r'(?:poisoned|malicious|compromised)\s+(?:vscode|vs\s+code|ide)\s+extension\s*.*(?:credential|secret|repo|source\s+code|pivot|endpoint)',
+     "CVE-2026-33634: poisoned IDE extension pivoting into internal infrastructure"),
+    (r'(?:vscode|vs\s+code)\s+(?:extension|plugin)\s*.*(?:malicious|backdoor|supply\s+chain|compromis)',
+     "Malicious VSCode extension supply chain attack vector"),
+    (r'(?:ide|editor)\s+(?:extension|plugin)\s*.*(?:credential\s+(?:theft|harvest|steal|exfiltrat)|ssh\s+key|cloud\s+key|api\s+key)',
+     "IDE extension credential theft / key harvesting attack"),
+    (r'(?:employee|developer)\s+(?:endpoint|workstation|machine)\s*.*(?:compromis|pivot|lateral\s+mov|owned)',
+     "Developer endpoint compromise pivoting to internal systems"),
+    (r'(?:vscode|vs\s+code|ide)\s+(?:marketplace|gallery)\s*.*(?:malicious|poisoned|backdoor|trojan)',
+     "Malicious package in IDE extension marketplace"),
+    (r'(?:internal\s+repo|private\s+repo|source\s+code)\s*.*(?:exfiltrat|stolen|breach|compromis)\s*.*(?:extension|plugin|supply\s+chain)',
+     "Internal repository exfiltration via supply chain compromise"),
+    (r'(?:trivy|checkmarx|bitwarden|tanstack)\s*.*(?:compromis|supply\s+chain|teampcp|unc6780|breach)',
+     "TeamPCP/UNC6780 related supply chain compromise (Trivy/Checkmarx/Bitwarden/TanStack)"),
+]
+
+AI_TASK_MARKETPLACE_PATTERNS = [
+    (r'(?:ai.to.ai|agent.to.agent|a2a)\s+(?:task\s+)?marketplace\s*.*(?:inject|malicious|untrusted|exploit|rce)',
+     "AI-to-AI task marketplace injection attack vector"),
+    (r'(?:aineedhelpfromotherai|external\s+task\s+market)\s*.*(?:agent|inject|malicious|claim|execute)',
+     "aineedhelpfromotherai.com / external AI task marketplace exploitation"),
+    (r'(?:agent|ai|autonomous)\s*.*(?:claim|accept|pull|execute)\s*.*(?:external\s+task|untrusted\s+task|marketplace\s+task)',
+     "Agent claiming/executing untrusted external tasks from marketplace"),
+    (r'(?:task\s+marketplace|task\s+exchange|job\s+board)\s*.*(?:ai\s+agent|autonomous|crewai|autogen|llamaindex|langchain)',
+     "AI task marketplace targeting autonomous agent frameworks"),
+    (r'(?:untrusted|unvetted|external)\s+(?:task|job|work)\s*.*(?:inject|hijack|exfiltrat|rce|command\s+inject)',
+     "Untrusted external task injection / hijacking vector"),
+    (r'(?:agent|autonomous)\s*.*(?:outbound\s+request|external\s+api|marketplace\s+api)\s*.*(?:unmonitor|unsanctioned|unvalidat)',
+     "Unmonitored agent outbound requests to external task sources"),
+]
+
+DIFY_TRACE_PATTERNS = [
+    (r'CVE.2026.41947',
+     "CVE-2026-41947: Dify tenant isolation bypass / trace redirection signature"),
+    (r'(?:dify)\s*.*(?:tenant\s+(?:bypass|isolat|check)|trace\s+(?:redirect|provider)|llm\s+trace)',
+     "CVE-2026-41947: Dify tenant isolation bypass for LLM trace redirection"),
+    (r'(?:trace\s+provider|tracing\s+provider|observability\s+provider)\s*.*(?:redirect|attacker|malicious|unauthorized)',
+     "LLM trace provider redirection to attacker-controlled endpoint"),
+    (r'(?:dify|llm\s+platform)\s*.*(?:editor|authenticated)\s*.*(?:bypass\s+tenant|redirect\s+trace|credential\s+(?:theft|expos))',
+     "Authenticated user redirecting LLM traces for credential theft"),
+]
+
+EXEC_OUTPUT_LEAK_PATTERNS = [
+    (r'(?:exec\s+tool|execute\s+tool|system\.run|shell\s+tool)\s*.*(?:stdout|stderr)\s*.*(?:secret|credential|token|key|password)\s*.*(?:leak|expos|unredact|unsanitiz)',
+     "OpenClaw issue #71211: exec tool stdout/stderr leaking secrets to agent context"),
+    (r'(?:raw\s+(?:stdout|stderr|output))\s*.*(?:secret|credential|api.?key|token|password)\s*.*(?:agent|context|llm|prompt)',
+     "Raw command output leaking secrets into agent/LLM context without redaction"),
+    (r'(?:agent|tool)\s*.*(?:exec|execute|run|command)\s*.*(?:output|result|stdout|stderr)\s*.*(?:no\s+redact|without\s+redact|unsanitiz|unfilter)',
+     "Agent tool execution output without secret redaction"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -1610,6 +1701,10 @@ PAIRING_AUTH_PATTERNS = _compile_patterns(PAIRING_AUTH_PATTERNS)
 INFRA_AUTH_BYPASS_PATTERNS = _compile_patterns(INFRA_AUTH_BYPASS_PATTERNS)
 OWASP_AGENTIC_PATTERNS = _compile_patterns(OWASP_AGENTIC_PATTERNS)
 AGENT_PLATFORM_PATTERNS = _compile_patterns(AGENT_PLATFORM_PATTERNS)
+IDE_SUPPLY_CHAIN_PATTERNS = _compile_patterns(IDE_SUPPLY_CHAIN_PATTERNS)
+AI_TASK_MARKETPLACE_PATTERNS = _compile_patterns(AI_TASK_MARKETPLACE_PATTERNS)
+DIFY_TRACE_PATTERNS = _compile_patterns(DIFY_TRACE_PATTERNS)
+EXEC_OUTPUT_LEAK_PATTERNS = _compile_patterns(EXEC_OUTPUT_LEAK_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -1680,6 +1775,10 @@ class ToolParser:
         self._canvas_auth_detections = 0
         self._ring0_escalation_detections = 0
         self._media_parser_detections = 0
+        self._ide_supply_chain_detections = 0
+        self._ai_task_marketplace_detections = 0
+        self._dify_trace_detections = 0
+        self._exec_output_leak_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -2065,6 +2164,50 @@ class ToolParser:
                         verdict=Verdict.BLOCK,
                         reason=f"Media parser exploit: {media_hit}",
                         threat_type="vulnerability",
+                        confidence=0.92
+                    ))
+
+        ide_sc_hit = self._detect_ide_supply_chain(raw_result)
+        if ide_sc_hit:
+            self._ide_supply_chain_detections += 1
+            return (f"[Lionguard] IDE supply chain attack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"IDE supply chain: {ide_sc_hit}",
+                        threat_type="supply_chain",
+                        confidence=0.95
+                    ))
+
+        task_mkt_hit = self._detect_ai_task_marketplace(raw_result)
+        if task_mkt_hit:
+            self._ai_task_marketplace_detections += 1
+            return (f"[Lionguard] AI task marketplace injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"AI task marketplace: {task_mkt_hit}",
+                        threat_type="injection",
+                        confidence=0.91
+                    ))
+
+        dify_hit = self._detect_dify_trace(raw_result)
+        if dify_hit:
+            self._dify_trace_detections += 1
+            return (f"[Lionguard] Dify trace redirect stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Trace redirect: {dify_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.93
+                    ))
+
+        exec_leak_hit = self._detect_exec_output_leak(raw_result)
+        if exec_leak_hit:
+            self._exec_output_leak_detections += 1
+            return (f"[Lionguard] Exec output secret leak stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Exec output leak: {exec_leak_hit}",
+                        threat_type="data_leak",
                         confidence=0.92
                     ))
 
@@ -2504,6 +2647,42 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_ide_supply_chain(self, text: str) -> Optional[str]:
+        """CVE-2026-33634: Detect IDE extension supply chain attacks including
+        TeamPCP/UNC6780 poisoned VSCode extensions that pivot from developer
+        endpoints into internal infrastructure."""
+        for pattern, description in IDE_SUPPLY_CHAIN_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_ai_task_marketplace(self, text: str) -> Optional[str]:
+        """Detect AI-to-AI task marketplace injection attacks where autonomous
+        agents claim and execute untrusted external tasks from public
+        marketplaces, enabling prompt injection, task hijacking, and RCE."""
+        for pattern, description in AI_TASK_MARKETPLACE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_dify_trace(self, text: str) -> Optional[str]:
+        """CVE-2026-41947: Detect Dify tenant isolation bypass where
+        authenticated editors redirect LLM traces to attacker-controlled
+        providers for credential theft."""
+        for pattern, description in DIFY_TRACE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_exec_output_leak(self, text: str) -> Optional[str]:
+        """Detect exec tool output leaking secrets to agent context without
+        redaction. OpenClaw issue #71211: raw stdout/stderr containing
+        credentials passed directly to agents."""
+        for pattern, description in EXEC_OUTPUT_LEAK_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_multimodal_audio(self, text: str) -> Optional[str]:
         """Detect audio-based injection vectors: WhisperInject, ultrasonic
         commands, subsonic modulation, adversarial audio perturbations."""
@@ -2573,4 +2752,8 @@ class ToolParser:
             "canvas_auth_detections": self._canvas_auth_detections,
             "ring0_escalation_detections": self._ring0_escalation_detections,
             "media_parser_detections": self._media_parser_detections,
+            "ide_supply_chain_detections": self._ide_supply_chain_detections,
+            "ai_task_marketplace_detections": self._ai_task_marketplace_detections,
+            "dify_trace_detections": self._dify_trace_detections,
+            "exec_output_leak_detections": self._exec_output_leak_detections,
         }
