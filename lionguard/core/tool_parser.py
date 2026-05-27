@@ -343,6 +343,30 @@ by existing defenses, two critical new attack classes):
 - MCP STDIO systemic design flaw: ~200,000 vulnerable deployments,
   shell command execution without sanitization (OX Security disclosure,
   Anthropic declined to modify protocol architecture).
+
+v0.27.0 patches (from Prowl 2026-05-21 / 05-22 / 05-23 / 05-24 / 05-25 /
+05-26 / 05-27 -- seven-day catch-up, one live payload blocked by existing
+OWASP Agentic defenses):
+- CVE-2026-40369: 12-byte browser sandbox escape affecting AI agents
+  using embedded browser or WebAssembly isolation environments.
+- OpenClaw cross-user memory leak (issue #85240): semantic recall in
+  relevant-memories leaks private memories across users by omitting
+  sender_id scope checks. New memory isolation detection patterns.
+- CVE-2026-9353: remote prompt injection in hermes-agent skills_guard.py
+  via THREAT_PATTERNS manipulation (meta-attack on security tooling).
+- CVE-2026-41863: Spring AI path traversal via unsanitized LLM-controlled
+  filenames enabling writes outside intended directories via Anthropic
+  Skills API.
+- CVE-2026-48710: Starlette ASGI host-header authentication bypass
+  affecting FastAPI-based AI deployments.
+- CVE-2026-44830: Nocturne Memory MCP agent memory manipulation
+  (live payload intercepted by existing OWASP Agentic defenses).
+- Agent continuation primitives: self-elected turn extension bypassing
+  existing turn/context limits (OpenClaw #85651).
+- Shared PTY terminal: AI and user sharing same interactive shell session
+  creating unauthorized command execution surface (OpenHands #14575).
+- Multi-tenant tool resolver isolation: cross-tenant tool access via
+  unsafe tool scoping in multi-agent setups (PraisonAI #1735).
 """
 
 import re
@@ -1393,6 +1417,84 @@ EXEC_OUTPUT_LEAK_PATTERNS = [
      "Agent tool execution output without secret redaction"),
 ]
 
+BROWSER_SANDBOX_ESCAPE_PATTERNS = [
+    (r'CVE.2026.40369',
+     "CVE-2026-40369: 12-byte browser sandbox escape signature"),
+    (r'(?:browser\s+sandbox|chromium\s+sandbox|v8\s+sandbox)\s*.*(?:escape|bypass|breakout|12.byte)',
+     "CVE-2026-40369: browser sandbox escape via minimal payload"),
+    (r'(?:12.byte|minimal\s+payload)\s*.*(?:sandbox\s+escape|sandbox\s+bypass|browser\s+escape)',
+     "CVE-2026-40369: minimal-byte browser sandbox escape technique"),
+    (r'(?:wasm|webassembly)\s*.*(?:isolation|sandbox)\s*.*(?:escape|bypass|breakout|exploit)',
+     "WebAssembly isolation escape in AI agent browser environment"),
+]
+
+MEMORY_ISOLATION_PATTERNS = [
+    (r'(?:semantic\s+recall|relevant.memories|memory\s+recall)\s*.*(?:leak|cross.user|sender_id|scope\s+check|isolation\s+bypass)',
+     "OpenClaw #85240: semantic recall leaking private memories across users"),
+    (r'(?:private\s+memor|user\s+memor)\s*.*(?:leak|cross.user|cross.tenant|isolation\s+bypass|scope\s+(?:check|filter))',
+     "Cross-user private memory leakage via missing scope isolation"),
+    (r'(?:sender_id|user_id|owner_id)\s*.*(?:missing|omit|skip|bypass)\s*.*(?:scope|filter|check|isolat)',
+     "Missing sender/user ID scope check in memory retrieval"),
+    (r'(?:memory|recall|retrieval)\s*.*(?:cross.user|cross.tenant|multi.user)\s*.*(?:leak|expos|bypass|violat)',
+     "Cross-user/cross-tenant memory retrieval isolation violation"),
+]
+
+SECURITY_META_ATTACK_PATTERNS = [
+    (r'CVE.2026.9353',
+     "CVE-2026-9353: hermes-agent skills_guard.py prompt injection signature"),
+    (r'(?:skills_guard|threat_patterns|security\s+guard)\s*.*(?:inject|manipulat|bypass|poison)\s*.*(?:pattern|rule|detection)',
+     "CVE-2026-9353: prompt injection targeting security tooling patterns"),
+    (r'(?:security\s+tool|guard\s+tool|detection\s+engine)\s*.*(?:inject|poison|manipulat)\s*.*(?:own|self|pattern|rule)',
+     "Meta-attack: injection targeting security detection tooling itself"),
+]
+
+SPRING_AI_PATTERNS = [
+    (r'CVE.2026.41863',
+     "CVE-2026-41863: Spring AI path traversal via LLM-controlled filenames signature"),
+    (r'(?:spring\s+ai)\s*.*(?:path\s+travers|unsanitiz\w+\s+filename|llm.controlled\s+filename|file\s+write)',
+     "CVE-2026-41863: Spring AI path traversal via unsanitized LLM-controlled filenames"),
+    (r'(?:llm.controlled|ai.controlled|agent.controlled)\s+filename\s*.*(?:path\s+travers|write\s+outside|directory\s+escape|unsanitiz)',
+     "LLM-controlled filename enabling path traversal / directory escape"),
+    (r'(?:anthropic\s+skills\s+api|skills\s+api)\s*.*(?:path\s+travers|file\s+write|arbitrary\s+write)',
+     "CVE-2026-41863: path traversal via Anthropic Skills API file write"),
+]
+
+STARLETTE_AUTH_PATTERNS = [
+    (r'CVE.2026.48710',
+     "CVE-2026-48710: Starlette host-header authentication bypass signature"),
+    (r'(?:starlette|fastapi)\s*.*(?:host.header|host\s+header)\s*.*(?:auth\w*\s+bypass|bypass\s+auth|spoof)',
+     "CVE-2026-48710: Starlette/FastAPI host-header authentication bypass"),
+    (r'(?:host.header)\s*.*(?:auth\w*\s+bypass|authentication\s+bypass)\s*.*(?:asgi|starlette|fastapi)',
+     "Host-header auth bypass in ASGI framework (Starlette/FastAPI)"),
+]
+
+AGENT_CONTINUATION_PATTERNS = [
+    (r'(?:agent|ai)\s*.*(?:continuation\s+primitive|self.elected|turn\s+extension)\s*.*(?:bypass|unlimited|unbound)',
+     "Agent continuation primitive bypassing turn/context limits"),
+    (r'(?:continuation\s+signal|continue\s+signal)\s*.*(?:agent|ai)\s*.*(?:bypass|abuse|self.elect)',
+     "Agent self-elected continuation signal abuse"),
+    (r'(?:agent|autonomous)\s*.*(?:extend\s+(?:its?\s+own\s+)?turn|bypass\s+(?:turn|context)\s+limit)',
+     "Autonomous agent extending its own turn bypassing limits"),
+]
+
+SHARED_PTY_PATTERNS = [
+    (r'(?:shared\s+pty|shared\s+terminal|pty.sharing)\s*.*(?:ai|agent|llm)\s*.*(?:user|human|attack\s+surface)',
+     "Shared PTY terminal: AI/user same interactive shell session attack surface"),
+    (r'(?:ai|agent)\s*.*(?:share|sharing)\s*.*(?:terminal|shell|pty|tty)\s*.*(?:user|human|interactive)',
+     "AI agent sharing interactive terminal session with user"),
+    (r'(?:winkterm|shared\s+shell)\s*.*(?:agent|ai)\s*.*(?:unauthoriz\w+\s+command|command\s+inject|attack\s+surface)',
+     "Shared terminal session enabling unauthorized AI agent commands"),
+]
+
+MULTI_TENANT_TOOL_PATTERNS = [
+    (r'(?:multi.tenant|cross.tenant)\s*.*(?:tool\s+resolver|tool\s+access|tool\s+scop)\s*.*(?:unsafe|bypass|leak|isolat)',
+     "Multi-tenant tool resolver isolation flaw enabling cross-tenant tool access"),
+    (r'(?:tenant.aware|tenant\s+isolation)\s*.*(?:tool|skill|function)\s*.*(?:scoping|sandbox|boundary)\s*.*(?:bypass|missing|fail)',
+     "Missing tenant-aware tool scoping / sandboxing boundary"),
+    (r'(?:cross.tenant)\s*.*(?:tool\s+invoc|tool\s+call|tool\s+access|function\s+call)\s*.*(?:bypass|unauthoriz|leak)',
+     "Cross-tenant unauthorized tool invocation"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -1705,6 +1807,14 @@ IDE_SUPPLY_CHAIN_PATTERNS = _compile_patterns(IDE_SUPPLY_CHAIN_PATTERNS)
 AI_TASK_MARKETPLACE_PATTERNS = _compile_patterns(AI_TASK_MARKETPLACE_PATTERNS)
 DIFY_TRACE_PATTERNS = _compile_patterns(DIFY_TRACE_PATTERNS)
 EXEC_OUTPUT_LEAK_PATTERNS = _compile_patterns(EXEC_OUTPUT_LEAK_PATTERNS)
+BROWSER_SANDBOX_ESCAPE_PATTERNS = _compile_patterns(BROWSER_SANDBOX_ESCAPE_PATTERNS)
+MEMORY_ISOLATION_PATTERNS = _compile_patterns(MEMORY_ISOLATION_PATTERNS)
+SECURITY_META_ATTACK_PATTERNS = _compile_patterns(SECURITY_META_ATTACK_PATTERNS)
+SPRING_AI_PATTERNS = _compile_patterns(SPRING_AI_PATTERNS)
+STARLETTE_AUTH_PATTERNS = _compile_patterns(STARLETTE_AUTH_PATTERNS)
+AGENT_CONTINUATION_PATTERNS = _compile_patterns(AGENT_CONTINUATION_PATTERNS)
+SHARED_PTY_PATTERNS = _compile_patterns(SHARED_PTY_PATTERNS)
+MULTI_TENANT_TOOL_PATTERNS = _compile_patterns(MULTI_TENANT_TOOL_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -1779,6 +1889,14 @@ class ToolParser:
         self._ai_task_marketplace_detections = 0
         self._dify_trace_detections = 0
         self._exec_output_leak_detections = 0
+        self._browser_sandbox_escape_detections = 0
+        self._memory_isolation_detections = 0
+        self._security_meta_attack_detections = 0
+        self._spring_ai_detections = 0
+        self._starlette_auth_detections = 0
+        self._agent_continuation_detections = 0
+        self._shared_pty_detections = 0
+        self._multi_tenant_tool_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -2208,6 +2326,94 @@ class ToolParser:
                         verdict=Verdict.BLOCK,
                         reason=f"Exec output leak: {exec_leak_hit}",
                         threat_type="data_leak",
+                        confidence=0.92
+                    ))
+
+        browser_sb_hit = self._detect_browser_sandbox_escape(raw_result)
+        if browser_sb_hit:
+            self._browser_sandbox_escape_detections += 1
+            return (f"[Lionguard] Browser sandbox escape stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Browser sandbox escape: {browser_sb_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        mem_iso_hit = self._detect_memory_isolation(raw_result)
+        if mem_iso_hit:
+            self._memory_isolation_detections += 1
+            return (f"[Lionguard] Memory isolation violation stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Memory isolation: {mem_iso_hit}",
+                        threat_type="data_leak",
+                        confidence=0.93
+                    ))
+
+        sec_meta_hit = self._detect_security_meta_attack(raw_result)
+        if sec_meta_hit:
+            self._security_meta_attack_detections += 1
+            return (f"[Lionguard] Security meta-attack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Security meta-attack: {sec_meta_hit}",
+                        threat_type="injection",
+                        confidence=0.95
+                    ))
+
+        spring_hit = self._detect_spring_ai(raw_result)
+        if spring_hit:
+            self._spring_ai_detections += 1
+            return (f"[Lionguard] Spring AI path traversal stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Spring AI vuln: {spring_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        starlette_hit = self._detect_starlette_auth(raw_result)
+        if starlette_hit:
+            self._starlette_auth_detections += 1
+            return (f"[Lionguard] Starlette auth bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Auth bypass: {starlette_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.93
+                    ))
+
+        cont_hit = self._detect_agent_continuation(raw_result)
+        if cont_hit:
+            self._agent_continuation_detections += 1
+            return (f"[Lionguard] Agent continuation abuse stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Agent continuation: {cont_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.90
+                    ))
+
+        pty_hit = self._detect_shared_pty(raw_result)
+        if pty_hit:
+            self._shared_pty_detections += 1
+            return (f"[Lionguard] Shared PTY attack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Shared PTY: {pty_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.91
+                    ))
+
+        mt_tool_hit = self._detect_multi_tenant_tool(raw_result)
+        if mt_tool_hit:
+            self._multi_tenant_tool_detections += 1
+            return (f"[Lionguard] Multi-tenant tool bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Multi-tenant tool: {mt_tool_hit}",
+                        threat_type="authentication_bypass",
                         confidence=0.92
                     ))
 
@@ -2647,6 +2853,71 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_browser_sandbox_escape(self, text: str) -> Optional[str]:
+        """CVE-2026-40369: Detect browser/WebAssembly sandbox escapes
+        affecting AI agents using embedded browser environments."""
+        for pattern, description in BROWSER_SANDBOX_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_memory_isolation(self, text: str) -> Optional[str]:
+        """Detect cross-user memory leakage in AI agent memory/recall
+        systems. OpenClaw #85240: semantic recall leaking private memories
+        across users via missing sender_id scope checks."""
+        for pattern, description in MEMORY_ISOLATION_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_security_meta_attack(self, text: str) -> Optional[str]:
+        """CVE-2026-9353: Detect meta-attacks targeting security tooling
+        itself -- prompt injection into THREAT_PATTERNS or guard logic."""
+        for pattern, description in SECURITY_META_ATTACK_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_spring_ai(self, text: str) -> Optional[str]:
+        """CVE-2026-41863: Detect Spring AI path traversal via unsanitized
+        LLM-controlled filenames in file write operations."""
+        for pattern, description in SPRING_AI_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_starlette_auth(self, text: str) -> Optional[str]:
+        """CVE-2026-48710: Detect Starlette/FastAPI host-header
+        authentication bypass affecting AI API deployments."""
+        for pattern, description in STARLETTE_AUTH_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_agent_continuation(self, text: str) -> Optional[str]:
+        """Detect agent-controlled continuation primitives that bypass
+        turn/context limits via self-elected turn extensions."""
+        for pattern, description in AGENT_CONTINUATION_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_shared_pty(self, text: str) -> Optional[str]:
+        """Detect shared PTY terminal sessions where AI and user share
+        the same interactive shell, creating unauthorized command surfaces."""
+        for pattern, description in SHARED_PTY_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_multi_tenant_tool(self, text: str) -> Optional[str]:
+        """Detect multi-tenant tool resolver isolation flaws enabling
+        cross-tenant tool access in multi-agent setups."""
+        for pattern, description in MULTI_TENANT_TOOL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_ide_supply_chain(self, text: str) -> Optional[str]:
         """CVE-2026-33634: Detect IDE extension supply chain attacks including
         TeamPCP/UNC6780 poisoned VSCode extensions that pivot from developer
@@ -2756,4 +3027,12 @@ class ToolParser:
             "ai_task_marketplace_detections": self._ai_task_marketplace_detections,
             "dify_trace_detections": self._dify_trace_detections,
             "exec_output_leak_detections": self._exec_output_leak_detections,
+            "browser_sandbox_escape_detections": self._browser_sandbox_escape_detections,
+            "memory_isolation_detections": self._memory_isolation_detections,
+            "security_meta_attack_detections": self._security_meta_attack_detections,
+            "spring_ai_detections": self._spring_ai_detections,
+            "starlette_auth_detections": self._starlette_auth_detections,
+            "agent_continuation_detections": self._agent_continuation_detections,
+            "shared_pty_detections": self._shared_pty_detections,
+            "multi_tenant_tool_detections": self._multi_tenant_tool_detections,
         }

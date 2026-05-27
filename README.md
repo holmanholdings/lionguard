@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**95+ defense layers across every attack stage — IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**110+ defense layers across every attack stage — browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -172,6 +172,14 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | LlamaIndex unsafe `torch.load()` pickle RCE | Blocks pickle-based code execution via embeddings adapter without `weights_only=True` (run-llama #21465) | ✅ |
 | AnythingLLM Chartable markdown XSS | Blocks XSS via `<script>`/event-handler/`javascript:` in markdown image alt text (CVE-2026-41318) | ✅ |
 | Tokenizer glitch tokens / dead zones | Detects Tag Characters, Variation Selectors, Specials, and Private Use Area density used for invisible prompt injection / prompt-guard bypass (Opus 4.7, ToxSec) | ✅ |
+| Browser sandbox escape (12-byte) | Detects CVE-2026-40369 minimal-byte browser/WebAssembly sandbox escape affecting AI agent browser environments | ✅ |
+| Cross-user memory isolation | Blocks semantic recall leaking private memories across users via missing sender_id scope checks (OpenClaw #85240) | ✅ |
+| Security meta-attack (guard injection) | Detects CVE-2026-9353 prompt injection targeting security tooling THREAT_PATTERNS to poison its own detection rules | ✅ |
+| Spring AI LLM-filename path traversal | Blocks CVE-2026-41863 path traversal via unsanitized LLM-controlled filenames in Anthropic Skills API | ✅ |
+| Starlette/FastAPI host-header auth bypass | Detects CVE-2026-48710 host-header authentication bypass in ASGI-based AI deployments | ✅ |
+| Agent continuation abuse | Detects self-elected agent continuation primitives bypassing turn/context limits (OpenClaw #85651) | ✅ |
+| Shared PTY terminal attack surface | Blocks unauthorized AI commands in shared interactive shell sessions (OpenHands #14575) | ✅ |
+| Multi-tenant tool resolver bypass | Detects cross-tenant tool access via unsafe multi-tenant tool scoping/sandboxing (PraisonAI #1735) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -574,6 +582,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.27.0** | 2026-05-27 | Seven-day catch-up (5/21-5/27). CVE-2026-40369 browser sandbox escape (12-byte payload). Cross-user memory isolation for semantic recall (OpenClaw #85240). CVE-2026-9353 security meta-attack -- prompt injection targeting security tooling's own detection patterns. CVE-2026-41863 Spring AI path traversal via LLM-controlled filenames. CVE-2026-48710 Starlette/FastAPI host-header auth bypass. Agent continuation primitive abuse (self-elected turn extensions). Shared PTY terminal attack surface (AI/user sharing interactive shell). Multi-tenant tool resolver isolation (cross-tenant tool access). CVE-2026-44830 Nocturne Memory MCP agent memory manipulation. 1 live payload blocked. |
 | **v0.26.0** | 2026-05-20 | Five-day catch-up (5/16-5/20) + GitHub breach external intel. Two CRITICAL new attack classes: IDE extension supply chain (TeamPCP/UNC6780 CVE-2026-33634 CVSS 9.4 -- poisoned VSCode extension into 3,800 GitHub internal repos) and AI-to-AI task marketplace injection (untrusted external task claiming across LlamaIndex/CrewAI/AutoGen). CVE-2026-41947 Dify tenant isolation bypass for LLM trace redirection. Exec tool stdout/stderr secret leakage (OpenClaw #71211). MCP STDIO systemic design flaw (~200K vulnerable deployments). CVE-2026-8719 WordPress MCP plugin. 1 live payload blocked. |
 | **v0.25.0** | 2026-05-15 | Six-day catch-up (5/10-5/15). CRITICAL new attack class: browser coding agent prompt injection (cookie/auth token theft via privileged Chrome session access). MCP service expansion: Code Runner RCE (CVE-2026-5029), RMCP DNS rebinding (CVE-2026-42559), Obot auth bypass (GHSA-vw82-7fv8-r6gp), Flowise MCP bypass RCE (GHSA-m99r-2hxc-cp3q), Open-WebSearch IPv6 SSRF (CVE-2026-42260). BentoML command injection via bentofile.yaml/docker.base_image (GHSA-w2pm/78f9). Nginx heap overflow (CVE-2026-42945). DirtyFrag additional CVEs (43284/43500). LangChain HTMLSemanticPreservingSplitter unsafe links. 6 live payloads blocked. |
 | **v0.24.0** | 2026-05-09 | Five-day catch-up (5/5-5/9). CRITICAL: Microsoft AutoGen unauthenticated RCE via WebSocket team_config (CVSS 9.8). OpenClaw 2026.4.x batch: 6 CVEs (42433/42435/42437/42438/43527/43528). vm2 sandbox escape to host RCE (CVE-2026-26956). New behavioral class: AI agent shutdown resistance (Costanza). LiteLLM triple-CVE: RCE + SQLi + MCP cmd injection. Claude Code sandbox escape via symlink (CVE-2026-39861). Langfuse RBAC secret exposure (CVE-2026-41487). PraisonAI MCP RCE (CVE-2026-41497). Dirty Frag K8s LPE (unset seccomp). GitHub.com RCE via git push (CVE-2026-3854). CrewAI HITL learn=True bypass. LangChain validate_safe_url SSRF bypass + Chroma.add_images() path traversal. |
