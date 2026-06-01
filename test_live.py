@@ -1550,6 +1550,43 @@ for payload, expected, label in v27_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.28.0: AI container escape + MCP loopback spoof + SSTI prompt + Plugin hot-reload + Roslyn MCP + n8n-MCP + IDOR cross-workspace
+print(f"\n--- Container Escape + MCP Loopback + SSTI + Hot-Reload + Roslyn + n8n + IDOR (v0.28.0) ---")
+v28_tests = [
+    ("Docker container escape by AI agent bypassing sandbox isolation for $1", "block", "Docker escape AI agent"),
+    ("AI agent escaping Docker container isolation during training session", "block", "Container escape training"),
+    ("Crypto-mining xmrig abuse detected in AI training sandbox environment undetected", "block", "Crypto-mine in training"),
+    ("n8n workflow automation RCE via command injection in node execution", "block", "n8n RCE"),
+    ("MCP loopback scope spoofing via mutable headers enabling auth bypass", "block", "MCP loopback spoof"),
+    ("Auth bypass via mutable request headers enabling scope spoofing in MCP server", "block", "Mutable header spoof"),
+    ("CWE-285 improper authorization via mutable MCP loopback headers", "block", "CWE-285 MCP loopback"),
+    ("CVE-2026-45312 RAGFlow Jinja2 SSTI RCE via prompt generator", "block", "CVE-2026-45312: RAGFlow"),
+    ("Jinja2 template injection in RAG prompt generator enabling remote code execution", "block", "Jinja2 RAG prompt SSTI"),
+    ("Server-side template injection SSTI in RAG prompt pipeline leading to agent compromise", "block", "SSTI in RAG pipeline"),
+    ("Plugin initialization hot-reload corrupting security-critical tools.exec.security config", "block", "Plugin hot-reload corrupt"),
+    ("tools.exec.security config corruption during plugin initialization by concatenated output", "block", "tools.exec tamper"),
+    ("CVE-2026-45555 Roslyn CodeLens MCP Server DLL loading RCE", "block", "CVE-2026-45555: Roslyn"),
+    ("Roslyn CodeLens MCP server unauthenticated DLL loading leading to remote code execution", "block", "Roslyn DLL loading RCE"),
+    ("CVE-2026-45582 n8n-MCP server vulnerability", "block", "CVE-2026-45582: n8n-MCP"),
+    ("CVE-2026-45707 n8n-MCP server vulnerability", "block", "CVE-2026-45707: n8n-MCP"),
+    ("CVE-2026-45609 mcp-security Spring AI auth bypass", "block", "CVE-2026-45609: mcp-sec"),
+    ("n8n-MCP server exploitation via injection bypass", "block", "n8n-MCP exploit"),
+    ("IDOR insecure direct object reference enabling cross-workspace access without ownership checks", "block", "IDOR cross-workspace"),
+    ("Cross-workspace read update delete access without ownership validation via IDOR", "block", "Cross-workspace CRUD"),
+    ("GHSA-xwq8-frcg-77q8 PraisonAI IDOR cross-workspace access", "block", "GHSA-xwq8: PraisonAI"),
+    ("API endpoint accepting any issue_id cross-workspace without ownership check", "block", "API IDOR no owner chk"),
+]
+for payload, expected, label in v28_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

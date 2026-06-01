@@ -367,6 +367,25 @@ OWASP Agentic defenses):
   creating unauthorized command execution surface (OpenHands #14575).
 - Multi-tenant tool resolver isolation: cross-tenant tool access via
   unsafe tool scoping in multi-agent setups (PraisonAI #1735).
+
+v0.28.0 patches (from Prowl 2026-05-28 / 05-29 / 05-30 / 05-31 / 06-01
+-- five-day catch-up, four live payloads blocked by existing defenses):
+- AI container/sandbox escape for AI agents: Docker escape for $1,
+  n8n RCE, crypto-mining during training (ToxSec disclosure).
+- MCP loopback scope spoofing via mutable headers (OpenClaw #64993,
+  CWE-285/639/807): auth bypass enabling scope elevation.
+- CVE-2026-45312: RAGFlow Jinja2 SSTI enabling authenticated RCE
+  via prompt generator template injection.
+- Plugin hot-reload config corruption (OpenClaw #64821):
+  plugin init output corrupting tools.exec.security enforcement.
+- CVE-2026-45555: Roslyn CodeLens MCP Server unauthenticated DLL
+  loading leading to RCE.
+- CVE-2026-45582 / CVE-2026-45707: n8n-MCP server vulnerabilities
+  (live payloads intercepted, explicit signatures added).
+- CVE-2026-45609: mcp-security Spring AI auth bypass (live payload
+  intercepted, explicit signature added).
+- IDOR cross-workspace access (PraisonAI GHSA-xwq8-frcg-77q8):
+  cross-workspace read/update/delete without ownership checks.
 """
 
 import re
@@ -1495,6 +1514,85 @@ MULTI_TENANT_TOOL_PATTERNS = [
      "Cross-tenant unauthorized tool invocation"),
 ]
 
+AI_CONTAINER_ESCAPE_PATTERNS = [
+    (r'(?:docker|container)\s*.*(?:escape|breakout|bypass)\s*.*(?:ai\s+agent|llm|sandbox|training)',
+     "AI agent Docker/container sandbox escape"),
+    (r'(?:ai\s+agent|llm|training)\s*.*(?:docker|container)\s*.*(?:escape|breakout|bypass)',
+     "AI agent escaping Docker/container isolation"),
+    (r'(?:crypto.?min|coin.?min|xmrig)\s*.*(?:training|gpu|agent|sandbox)',
+     "Crypto-mining abuse in AI training/agent sandbox environment"),
+    (r'(?:training|gpu|agent|sandbox)\s*.*(?:crypto.?min|coin.?min|xmrig)\s*.*(?:detect|undetect|hidden)',
+     "Hidden/undetected crypto-mining during AI training"),
+    (r'(?:sandbox|container)\s*.*(?:escape|breakout)\s*.*(?:\$1|one\s+dollar|trivial|cheap)',
+     "Trivially cheap sandbox/container escape technique"),
+    (r'n8n\s*.*(?:rce|remote\s+code\s+exec|command\s+inject)',
+     "n8n workflow automation RCE"),
+]
+
+MCP_LOOPBACK_SPOOF_PATTERNS = [
+    (r'(?:mcp|model\s+context)\s*.*(?:loopback)\s*.*(?:spoof|bypass|scope\s+elev)',
+     "MCP loopback scope spoofing via mutable headers"),
+    (r'(?:mutable\s+header|header\s+mutab)\s*.*(?:scope\s+spoof|auth\s+bypass|scope\s+elev)',
+     "Auth bypass via mutable request headers enabling scope spoofing"),
+    (r'CWE.(?:285|639|807)\s*.*(?:mcp|loopback|header)',
+     "CWE-285/639/807: improper authorization via mutable MCP headers"),
+    (r'(?:loopback)\s*.*(?:scope|auth)\s*.*(?:spoof|bypass|elev)\s*.*(?:header|request)',
+     "Loopback scope elevation via spoofed request headers"),
+]
+
+SSTI_PROMPT_PATTERNS = [
+    (r'CVE.2026.45312',
+     "CVE-2026-45312: RAGFlow Jinja2 SSTI RCE via prompt generator"),
+    (r'(?:ragflow)\s*.*(?:ssti|template\s+inject|jinja2?\s+inject)\s*.*(?:rce|exec)',
+     "CVE-2026-45312: RAGFlow SSTI enabling RCE via prompt template"),
+    (r'(?:jinja2?|template)\s*.*(?:inject\w*|ssti)\s*.*(?:prompt\s+generat|rag\s+prompt|workflow)',
+     "Jinja2/template injection in RAG prompt generator or workflow component"),
+    (r'(?:ssti|server.side\s+template\s+inject)\s*.*(?:rag|prompt|llm|agent)',
+     "Server-side template injection in RAG/LLM/agent prompt pipeline"),
+]
+
+PLUGIN_HOTRELOAD_PATTERNS = [
+    (r'(?:plugin|extension)\s*.*(?:init|hot.reload|reload)\s*.*(?:corrupt|tamper|overwrite)\s*.*(?:config|security|exec)',
+     "Plugin init/hot-reload corrupting security-critical config values"),
+    (r'(?:tools\.exec|exec\.security|security\.config)\s*.*(?:corrupt|tamper|concatenat|overwrite)\s*.*(?:plugin|init|reload)',
+     "tools.exec.security config corruption during plugin initialization"),
+    (r'(?:hot.reload|plugin\s+init)\s*.*(?:output|stdout)\s*.*(?:concatenat|inject)\s*.*(?:config|setting|enforce)',
+     "Plugin initialization output injected into enforcement settings"),
+]
+
+ROSLYN_MCP_PATTERNS = [
+    (r'CVE.2026.45555',
+     "CVE-2026-45555: Roslyn CodeLens MCP Server DLL loading RCE"),
+    (r'(?:roslyn|codelens)\s*.*(?:mcp|server)\s*.*(?:dll\s+load|unauthenticat\w+\s+.*rce|diagnostic)',
+     "CVE-2026-45555: Roslyn CodeLens MCP unauthenticated DLL loading RCE"),
+    (r'(?:diagnostic\s*analyzer|codelens)\s*.*(?:dll\s+load|assembly\s+load)\s*.*(?:rce|unauth|remote)',
+     "DiagnosticAnalyzer DLL loading leading to unauthenticated RCE"),
+]
+
+N8N_MCP_PATTERNS = [
+    (r'CVE.2026.45582',
+     "CVE-2026-45582: n8n-MCP server vulnerability"),
+    (r'CVE.2026.45707',
+     "CVE-2026-45707: n8n-MCP server vulnerability"),
+    (r'CVE.2026.45609',
+     "CVE-2026-45609: mcp-security Spring AI auth bypass"),
+    (r'(?:n8n.mcp|n8n\s+mcp)\s*.*(?:vuln|exploit|inject|bypass|rce)',
+     "n8n-MCP server exploitation"),
+    (r'(?:mcp.security)\s*.*(?:spring\s+ai|auth\s+bypass|bypass\s+auth)',
+     "mcp-security Spring AI authentication bypass"),
+]
+
+IDOR_CROSS_WORKSPACE_PATTERNS = [
+    (r'(?:idor|insecure\s+direct\s+object)\s*.*(?:cross.workspace|workspace\s+bypass|workspace\s+access)',
+     "IDOR enabling cross-workspace access without ownership checks"),
+    (r'(?:cross.workspace)\s*.*(?:read|update|delete|access)\s*.*(?:without\s+ownership|without\s+auth|no\s+check)',
+     "Cross-workspace read/update/delete without ownership validation"),
+    (r'GHSA.xwq8.frcg.77q8',
+     "GHSA-xwq8-frcg-77q8: PraisonAI IDOR cross-workspace access"),
+    (r'(?:issue|project|endpoint)\s*.*(?:any\s+.*_id|cross.workspace)\s*.*(?:without\s+.*check|no\s+owner)',
+     "API endpoint accepting any ID without workspace ownership check"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -1815,6 +1913,13 @@ STARLETTE_AUTH_PATTERNS = _compile_patterns(STARLETTE_AUTH_PATTERNS)
 AGENT_CONTINUATION_PATTERNS = _compile_patterns(AGENT_CONTINUATION_PATTERNS)
 SHARED_PTY_PATTERNS = _compile_patterns(SHARED_PTY_PATTERNS)
 MULTI_TENANT_TOOL_PATTERNS = _compile_patterns(MULTI_TENANT_TOOL_PATTERNS)
+AI_CONTAINER_ESCAPE_PATTERNS = _compile_patterns(AI_CONTAINER_ESCAPE_PATTERNS)
+MCP_LOOPBACK_SPOOF_PATTERNS = _compile_patterns(MCP_LOOPBACK_SPOOF_PATTERNS)
+SSTI_PROMPT_PATTERNS = _compile_patterns(SSTI_PROMPT_PATTERNS)
+PLUGIN_HOTRELOAD_PATTERNS = _compile_patterns(PLUGIN_HOTRELOAD_PATTERNS)
+ROSLYN_MCP_PATTERNS = _compile_patterns(ROSLYN_MCP_PATTERNS)
+N8N_MCP_PATTERNS = _compile_patterns(N8N_MCP_PATTERNS)
+IDOR_CROSS_WORKSPACE_PATTERNS = _compile_patterns(IDOR_CROSS_WORKSPACE_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -1897,6 +2002,13 @@ class ToolParser:
         self._agent_continuation_detections = 0
         self._shared_pty_detections = 0
         self._multi_tenant_tool_detections = 0
+        self._ai_container_escape_detections = 0
+        self._mcp_loopback_spoof_detections = 0
+        self._ssti_prompt_detections = 0
+        self._plugin_hotreload_detections = 0
+        self._roslyn_mcp_detections = 0
+        self._n8n_mcp_detections = 0
+        self._idor_cross_workspace_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -2417,6 +2529,83 @@ class ToolParser:
                         confidence=0.92
                     ))
 
+        container_esc_hit = self._detect_ai_container_escape(raw_result)
+        if container_esc_hit:
+            self._ai_container_escape_detections += 1
+            return (f"[Lionguard] AI container escape stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Container escape: {container_esc_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        loopback_hit = self._detect_mcp_loopback_spoof(raw_result)
+        if loopback_hit:
+            self._mcp_loopback_spoof_detections += 1
+            return (f"[Lionguard] MCP loopback spoof stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"MCP loopback spoof: {loopback_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.93
+                    ))
+
+        ssti_hit = self._detect_ssti_prompt(raw_result)
+        if ssti_hit:
+            self._ssti_prompt_detections += 1
+            return (f"[Lionguard] SSTI prompt injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"SSTI: {ssti_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        hotreload_hit = self._detect_plugin_hotreload(raw_result)
+        if hotreload_hit:
+            self._plugin_hotreload_detections += 1
+            return (f"[Lionguard] Plugin hot-reload config corruption stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Config corruption: {hotreload_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.91
+                    ))
+
+        roslyn_hit = self._detect_roslyn_mcp(raw_result)
+        if roslyn_hit:
+            self._roslyn_mcp_detections += 1
+            return (f"[Lionguard] Roslyn MCP DLL exploit stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Roslyn MCP: {roslyn_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        n8n_hit = self._detect_n8n_mcp(raw_result)
+        if n8n_hit:
+            self._n8n_mcp_detections += 1
+            return (f"[Lionguard] n8n-MCP exploit stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"n8n-MCP: {n8n_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        idor_hit = self._detect_idor_cross_workspace(raw_result)
+        if idor_hit:
+            self._idor_cross_workspace_detections += 1
+            return (f"[Lionguard] IDOR cross-workspace access stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"IDOR: {idor_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.92
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -2853,6 +3042,62 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_ai_container_escape(self, text: str) -> Optional[str]:
+        """Detect AI agent Docker/container sandbox escapes and
+        crypto-mining abuse in training environments."""
+        for pattern, description in AI_CONTAINER_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mcp_loopback_spoof(self, text: str) -> Optional[str]:
+        """Detect MCP loopback scope spoofing via mutable request
+        headers (CWE-285/639/807)."""
+        for pattern, description in MCP_LOOPBACK_SPOOF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_ssti_prompt(self, text: str) -> Optional[str]:
+        """CVE-2026-45312: Detect Jinja2/SSTI in RAG prompt generators
+        and workflow components enabling RCE."""
+        for pattern, description in SSTI_PROMPT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_plugin_hotreload(self, text: str) -> Optional[str]:
+        """Detect plugin hot-reload/init corrupting security-critical
+        config values (tools.exec.security tampering)."""
+        for pattern, description in PLUGIN_HOTRELOAD_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_roslyn_mcp(self, text: str) -> Optional[str]:
+        """CVE-2026-45555: Detect Roslyn CodeLens MCP Server
+        unauthenticated DLL loading RCE."""
+        for pattern, description in ROSLYN_MCP_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_n8n_mcp(self, text: str) -> Optional[str]:
+        """CVE-2026-45582/45707/45609: Detect n8n-MCP server
+        vulnerabilities and mcp-security Spring AI auth bypass."""
+        for pattern, description in N8N_MCP_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_idor_cross_workspace(self, text: str) -> Optional[str]:
+        """Detect IDOR enabling cross-workspace access without
+        ownership checks (PraisonAI GHSA-xwq8-frcg-77q8)."""
+        for pattern, description in IDOR_CROSS_WORKSPACE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_browser_sandbox_escape(self, text: str) -> Optional[str]:
         """CVE-2026-40369: Detect browser/WebAssembly sandbox escapes
         affecting AI agents using embedded browser environments."""
@@ -3035,4 +3280,11 @@ class ToolParser:
             "agent_continuation_detections": self._agent_continuation_detections,
             "shared_pty_detections": self._shared_pty_detections,
             "multi_tenant_tool_detections": self._multi_tenant_tool_detections,
+            "ai_container_escape_detections": self._ai_container_escape_detections,
+            "mcp_loopback_spoof_detections": self._mcp_loopback_spoof_detections,
+            "ssti_prompt_detections": self._ssti_prompt_detections,
+            "plugin_hotreload_detections": self._plugin_hotreload_detections,
+            "roslyn_mcp_detections": self._roslyn_mcp_detections,
+            "n8n_mcp_detections": self._n8n_mcp_detections,
+            "idor_cross_workspace_detections": self._idor_cross_workspace_detections,
         }
