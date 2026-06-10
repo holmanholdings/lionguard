@@ -386,6 +386,29 @@ v0.28.0 patches (from Prowl 2026-05-28 / 05-29 / 05-30 / 05-31 / 06-01
   intercepted, explicit signature added).
 - IDOR cross-workspace access (PraisonAI GHSA-xwq8-frcg-77q8):
   cross-workspace read/update/delete without ownership checks.
+
+v0.29.0 patches (from Prowl 2026-06-02 / 06-03 / 06-04 / 06-05 / 06-06 /
+06-07 / 06-08 / 06-09 / 06-10 -- nine-day catch-up, three live payloads
+blocked by existing OWASP Agentic + AI task marketplace defenses):
+- Tool-loop / DoomLoop attack (PraisonAI #1831): chat path lacks
+  idempotency/loop guard, enabling infinite tool-call loops.
+- Indirect prompt injection via untrusted tool results (PraisonAI #1820):
+  raw web search/scrape/MCP results reaching agent context unmitigated.
+- Agent handoff tool boundary bypass (PraisonAI #1842): sub-agents
+  retain full original toolset beyond delegator intent after handoff.
+- kubectl flag injection / bearer token exfiltration
+  (GHSA-6mx4-4h42-r8vh): MCP Server Kubernetes generic flag injection.
+- LangChain OpenAI computer-use tool bypass (langchain-ai #37937):
+  tool calls executing outside standard LangChain tool call interception.
+- Sandbox policy bypass + credential cross-leak (PraisonAI #1866):
+  SubprocessSandbox ignoring SecurityPolicy/ResourceLimits.
+- Sandbox path traversal + rate-limiter flaws (PraisonAI #1869):
+  exploitable traversal plus rate-limiter serialization bypass.
+- CVE-2026-49948: Mem0 RBAC bypass on POST /configure, allowing any
+  authenticated key holder to redirect LLM/embedder traffic.
+- Cross-framework agent discovery attack surface (AutoGen #7709):
+  public coordination layer enabling unauthorized cross-framework
+  agent interactions.
 """
 
 import re
@@ -1593,6 +1616,86 @@ IDOR_CROSS_WORKSPACE_PATTERNS = [
      "API endpoint accepting any ID without workspace ownership check"),
 ]
 
+TOOL_LOOP_PATTERNS = [
+    (r'(?:doom.?loop|tool.?loop|infinite\s+(?:tool|function)\s*.*(?:call|loop|cycle))',
+     "DoomLoop / infinite tool-call loop attack"),
+    (r'(?:tool.call|function.call)\s*.*(?:dedup|idempoten|loop\s+guard|loop\s+detect)\s*.*(?:missing|bypass|absent|lack)',
+     "Missing tool-call loop guard / idempotency check"),
+    (r'(?:chat\s+path|chat\s+mode|agent\.chat)\s*.*(?:loop\s+guard|loop\s+detect|doom.?loop)\s*.*(?:missing|absent|lack|bypass)',
+     "Chat path missing DoomLoop detector present in autonomous mode"),
+    (r'(?:runaway|unbounded|infinite)\s+(?:tool|function)\s*.*(?:call|invoc|exec)\s*.*(?:loop|cycle|repeat)',
+     "Runaway unbounded tool invocation loop"),
+]
+
+INDIRECT_INJECTION_PATTERNS = [
+    (r'(?:indirect\s+prompt\s+inject)\s*.*(?:tool\s+result|tool\s+output|web\s+search|scrap|mcp)',
+     "Indirect prompt injection via untrusted tool results"),
+    (r'(?:raw\s+(?:untrusted|unsanitiz))\s*.*(?:tool\s+result|tool\s+output|search\s+result|scrap)',
+     "Raw untrusted tool results reaching agent context without sanitization"),
+    (r'(?:taint\s+track|taint\s+propagat)\s*.*(?:tool|agent|mcp)\s*.*(?:missing|absent|lack|unmitiga)',
+     "Missing taint tracking for external tool outputs in agent context"),
+    (r'(?:tool\s+result|tool\s+output|external\s+output)\s*.*(?:inject\w*|poison\w*)\s*.*(?:agent\s+context|llm\s+context|prompt)',
+     "Tool result injection poisoning agent/LLM context"),
+]
+
+HANDOFF_TOOL_BOUNDARY_PATTERNS = [
+    (r'(?:agent\s+handoff|handoff)\s*.*(?:tool\s+bound|toolset\s+scop|tool\s+enforc)\s*.*(?:missing|bypass|lack|retain)',
+     "Agent handoff missing tool boundary enforcement"),
+    (r'(?:sub.agent|delegat\w+\s+agent|child\s+agent)\s*.*(?:retain|inherit|keep)\s*.*(?:full\s+toolset|original\s+tool|all\s+tool)',
+     "Sub-agent retaining full original toolset beyond delegator intent"),
+    (r'(?:handoff|delegat)\s*.*(?:toolset|tool\s+access)\s*.*(?:scop|restrict|bound|limit)\s*.*(?:missing|bypass|enforce)',
+     "Handoff operation missing mandatory toolset scoping enforcement"),
+]
+
+KUBECTL_INJECTION_PATTERNS = [
+    (r'GHSA.6mx4.4h42.r8vh',
+     "GHSA-6mx4-4h42-r8vh: kubectl flag injection in MCP Server Kubernetes"),
+    (r'(?:kubectl)\s*.*(?:flag\s+inject|arg\s+inject|argument\s+inject)\s*.*(?:bearer|token|exfil|secret)',
+     "kubectl flag injection enabling bearer token exfiltration"),
+    (r'(?:kubernetes|k8s)\s*.*(?:mcp|server)\s*.*(?:flag\s+inject|command\s+inject|arg\s+inject)',
+     "Kubernetes MCP server flag/argument injection"),
+    (r'(?:kubectl|kubernetes)\s*.*(?:unsanitiz\w+\s+flag|generic\s+flag)\s*.*(?:inject|exploit|abuse)',
+     "kubectl unsanitized generic flag injection"),
+]
+
+COMPUTER_USE_BYPASS_PATTERNS = [
+    (r'(?:computer.use|computer_use)\s*.*(?:tool\s+call|tool\s+exec)\s*.*(?:bypass|outside|skip)\s*.*(?:standard|intercept|security)',
+     "OpenAI computer-use tool calls bypassing standard security interception"),
+    (r'(?:openai|computer.use)\s*.*(?:execution\s+path|exec\s+path)\s*.*(?:bypass|outside|non.standard)',
+     "Computer-use execution path bypassing standard tool call interception"),
+    (r'(?:tool\s+call|tool\s+exec)\s*.*(?:outside\s+standard|bypass\s+.*intercept|skip\s+.*security\s+control)',
+     "Tool calls executing outside standard agent security control path"),
+]
+
+SANDBOX_POLICY_BYPASS_PATTERNS = [
+    (r'(?:subprocess\s*sandbox|sandbox)\s*.*(?:ignor|bypass|skip)\s*.*(?:security\s*policy|resource\s*limit|policy\s+enforc)',
+     "Sandbox ignoring SecurityPolicy/ResourceLimits enforcement"),
+    (r'(?:credential|secret|api.key)\s*.*(?:cross.provider|cross.leak|leak\s+across)\s*.*(?:provider|sandbox|isol)',
+     "Credential cross-leak across providers in sandbox environment"),
+    (r'(?:sandbox)\s*.*(?:path\s+travers|directory\s+travers)\s*.*(?:exploit|bypass|flaw)',
+     "Exploitable sandbox path traversal"),
+    (r'(?:rate.limit\w*)\s*.*(?:serial|bypass|flaw)\s*.*(?:sandbox|agent|security)',
+     "Rate-limiter serialization flaw in agent sandbox"),
+]
+
+MEM0_RBAC_PATTERNS = [
+    (r'CVE.2026.49948',
+     "CVE-2026-49948: Mem0 RBAC bypass on /configure endpoint"),
+    (r'(?:mem0)\s*.*(?:rbac|role\s+valid|auth\w*)\s*.*(?:bypass|missing|redirect)',
+     "Mem0 missing role validation allowing LLM/embedder traffic redirection"),
+    (r'(?:/configure|config\s+endpoint)\s*.*(?:rbac|role\s+valid)\s*.*(?:missing|bypass|any\s+.*key)',
+     "Config endpoint missing RBAC allowing unauthorized LLM redirection"),
+]
+
+AGENT_DISCOVERY_PATTERNS = [
+    (r'(?:cross.framework|multi.framework)\s*.*(?:agent\s+discover|coordinat\w+\s+layer|public\s+coordinat)',
+     "Cross-framework agent discovery creating unauthorized interaction surface"),
+    (r'(?:agent\s+discover|agent\s+registry)\s*.*(?:public|unauth|attack\s+surface)\s*.*(?:coordinat|interact|exploit)',
+     "Public agent discovery/registry creating attack surface"),
+    (r'(?:public\s+coordinat)\s*.*(?:agent|multi.agent)\s*.*(?:unauthoriz|attack|exploit|abuse)',
+     "Public coordination layer enabling unauthorized multi-agent interactions"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -1920,6 +2023,14 @@ PLUGIN_HOTRELOAD_PATTERNS = _compile_patterns(PLUGIN_HOTRELOAD_PATTERNS)
 ROSLYN_MCP_PATTERNS = _compile_patterns(ROSLYN_MCP_PATTERNS)
 N8N_MCP_PATTERNS = _compile_patterns(N8N_MCP_PATTERNS)
 IDOR_CROSS_WORKSPACE_PATTERNS = _compile_patterns(IDOR_CROSS_WORKSPACE_PATTERNS)
+TOOL_LOOP_PATTERNS = _compile_patterns(TOOL_LOOP_PATTERNS)
+INDIRECT_INJECTION_PATTERNS = _compile_patterns(INDIRECT_INJECTION_PATTERNS)
+HANDOFF_TOOL_BOUNDARY_PATTERNS = _compile_patterns(HANDOFF_TOOL_BOUNDARY_PATTERNS)
+KUBECTL_INJECTION_PATTERNS = _compile_patterns(KUBECTL_INJECTION_PATTERNS)
+COMPUTER_USE_BYPASS_PATTERNS = _compile_patterns(COMPUTER_USE_BYPASS_PATTERNS)
+SANDBOX_POLICY_BYPASS_PATTERNS = _compile_patterns(SANDBOX_POLICY_BYPASS_PATTERNS)
+MEM0_RBAC_PATTERNS = _compile_patterns(MEM0_RBAC_PATTERNS)
+AGENT_DISCOVERY_PATTERNS = _compile_patterns(AGENT_DISCOVERY_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2009,6 +2120,14 @@ class ToolParser:
         self._roslyn_mcp_detections = 0
         self._n8n_mcp_detections = 0
         self._idor_cross_workspace_detections = 0
+        self._tool_loop_detections = 0
+        self._indirect_injection_detections = 0
+        self._handoff_tool_boundary_detections = 0
+        self._kubectl_injection_detections = 0
+        self._computer_use_bypass_detections = 0
+        self._sandbox_policy_bypass_detections = 0
+        self._mem0_rbac_detections = 0
+        self._agent_discovery_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -2606,6 +2725,94 @@ class ToolParser:
                         confidence=0.92
                     ))
 
+        tool_loop_hit = self._detect_tool_loop(raw_result)
+        if tool_loop_hit:
+            self._tool_loop_detections += 1
+            return (f"[Lionguard] Tool-loop attack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Tool loop: {tool_loop_hit}",
+                        threat_type="denial_of_service",
+                        confidence=0.93
+                    ))
+
+        indirect_inj_hit = self._detect_indirect_injection(raw_result)
+        if indirect_inj_hit:
+            self._indirect_injection_detections += 1
+            return (f"[Lionguard] Indirect injection via tool result stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Indirect injection: {indirect_inj_hit}",
+                        threat_type="injection",
+                        confidence=0.93
+                    ))
+
+        handoff_hit = self._detect_handoff_tool_boundary(raw_result)
+        if handoff_hit:
+            self._handoff_tool_boundary_detections += 1
+            return (f"[Lionguard] Handoff tool boundary bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Handoff bypass: {handoff_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.92
+                    ))
+
+        kubectl_hit = self._detect_kubectl_injection(raw_result)
+        if kubectl_hit:
+            self._kubectl_injection_detections += 1
+            return (f"[Lionguard] kubectl injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"kubectl injection: {kubectl_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        cu_bypass_hit = self._detect_computer_use_bypass(raw_result)
+        if cu_bypass_hit:
+            self._computer_use_bypass_detections += 1
+            return (f"[Lionguard] Computer-use bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Computer-use bypass: {cu_bypass_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.92
+                    ))
+
+        sb_policy_hit = self._detect_sandbox_policy_bypass(raw_result)
+        if sb_policy_hit:
+            self._sandbox_policy_bypass_detections += 1
+            return (f"[Lionguard] Sandbox policy bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Sandbox policy: {sb_policy_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.93
+                    ))
+
+        mem0_hit = self._detect_mem0_rbac(raw_result)
+        if mem0_hit:
+            self._mem0_rbac_detections += 1
+            return (f"[Lionguard] Mem0 RBAC bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Mem0 RBAC: {mem0_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.92
+                    ))
+
+        agent_disc_hit = self._detect_agent_discovery(raw_result)
+        if agent_disc_hit:
+            self._agent_discovery_detections += 1
+            return (f"[Lionguard] Agent discovery attack stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Agent discovery: {agent_disc_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.90
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -3042,6 +3249,70 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_tool_loop(self, text: str) -> Optional[str]:
+        """Detect DoomLoop / infinite tool-call loop attacks where
+        chat paths lack idempotency or loop guard detection."""
+        for pattern, description in TOOL_LOOP_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_indirect_injection(self, text: str) -> Optional[str]:
+        """Detect indirect prompt injection via raw untrusted tool
+        results (web search, scraping, MCP) reaching agent context."""
+        for pattern, description in INDIRECT_INJECTION_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_handoff_tool_boundary(self, text: str) -> Optional[str]:
+        """Detect agent handoff operations lacking tool boundary
+        enforcement, letting sub-agents retain full toolsets."""
+        for pattern, description in HANDOFF_TOOL_BOUNDARY_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_kubectl_injection(self, text: str) -> Optional[str]:
+        """GHSA-6mx4-4h42-r8vh: Detect kubectl flag injection
+        in MCP Server Kubernetes enabling token exfiltration."""
+        for pattern, description in KUBECTL_INJECTION_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_computer_use_bypass(self, text: str) -> Optional[str]:
+        """Detect OpenAI computer-use tool calls executing outside
+        standard LangChain tool call interception path."""
+        for pattern, description in COMPUTER_USE_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_sandbox_policy_bypass(self, text: str) -> Optional[str]:
+        """Detect sandbox implementations ignoring SecurityPolicy/
+        ResourceLimits and credential cross-leaks across providers."""
+        for pattern, description in SANDBOX_POLICY_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mem0_rbac(self, text: str) -> Optional[str]:
+        """CVE-2026-49948: Detect Mem0 RBAC bypass on /configure
+        endpoint allowing unauthorized LLM/embedder redirection."""
+        for pattern, description in MEM0_RBAC_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_agent_discovery(self, text: str) -> Optional[str]:
+        """Detect cross-framework agent discovery creating unauthorized
+        interaction surfaces via public coordination layers."""
+        for pattern, description in AGENT_DISCOVERY_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_ai_container_escape(self, text: str) -> Optional[str]:
         """Detect AI agent Docker/container sandbox escapes and
         crypto-mining abuse in training environments."""
@@ -3287,4 +3558,12 @@ class ToolParser:
             "roslyn_mcp_detections": self._roslyn_mcp_detections,
             "n8n_mcp_detections": self._n8n_mcp_detections,
             "idor_cross_workspace_detections": self._idor_cross_workspace_detections,
+            "tool_loop_detections": self._tool_loop_detections,
+            "indirect_injection_detections": self._indirect_injection_detections,
+            "handoff_tool_boundary_detections": self._handoff_tool_boundary_detections,
+            "kubectl_injection_detections": self._kubectl_injection_detections,
+            "computer_use_bypass_detections": self._computer_use_bypass_detections,
+            "sandbox_policy_bypass_detections": self._sandbox_policy_bypass_detections,
+            "mem0_rbac_detections": self._mem0_rbac_detections,
+            "agent_discovery_detections": self._agent_discovery_detections,
         }

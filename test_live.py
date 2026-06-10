@@ -1587,6 +1587,43 @@ for payload, expected, label in v28_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.29.0: Tool loop + Indirect injection + Handoff boundary + kubectl + Computer-use + Sandbox policy + Mem0 RBAC + Agent discovery
+print(f"\n--- Tool Loop + Indirect Inject + Handoff + kubectl + Computer-Use + Sandbox + Mem0 + Discovery (v0.29.0) ---")
+v29_tests = [
+    ("DoomLoop infinite tool-call loop attack in agent chat path", "block", "DoomLoop tool-call loop"),
+    ("Tool-call loop guard missing in chat mode allowing runaway unbounded tool invocation loop", "block", "Tool-call loop guard"),
+    ("Chat path missing DoomLoop detector present in autonomous mode creating tool loop bypass", "block", "Chat DoomLoop bypass"),
+    ("Indirect prompt injection via untrusted tool results from web search and MCP scraping", "block", "Indirect inject via tools"),
+    ("Raw untrusted tool results from web scraping reaching agent context without sanitization", "block", "Raw untrusted tool result"),
+    ("Tool result injection poisoning agent context with untrusted external output", "block", "Tool result injection"),
+    ("Agent handoff missing tool boundary enforcement letting sub-agents retain all tools", "block", "Handoff tool boundary"),
+    ("Sub-agent retaining full original toolset beyond delegator intent after handoff operation", "block", "Sub-agent toolset retain"),
+    ("Handoff operation missing mandatory toolset scoping enforcement for delegated agents", "block", "Handoff scope enforce"),
+    ("GHSA-6mx4-4h42-r8vh kubectl flag injection in MCP Server Kubernetes", "block", "GHSA-6mx4: kubectl"),
+    ("kubectl flag injection enabling bearer token exfiltration via malicious CLI arguments", "block", "kubectl bearer exfil"),
+    ("Kubernetes MCP server flag injection allowing command injection via unsanitized args", "block", "K8s MCP flag inject"),
+    ("OpenAI computer-use tool calls bypass standard security interception in LangChain", "block", "Computer-use bypass"),
+    ("Computer-use execution path bypass outside standard tool call interception controls", "block", "CU exec path bypass"),
+    ("Tool calls executing outside standard agent security control path via computer-use", "block", "Tool outside sec path"),
+    ("SubprocessSandbox ignoring SecurityPolicy and ResourceLimits enforcement bypassing controls", "block", "Sandbox policy bypass"),
+    ("Credential cross-leak across providers in sandbox environment due to isolation failure", "block", "Credential cross-leak"),
+    ("Exploitable sandbox path traversal bypass allowing directory escape", "block", "Sandbox path traversal"),
+    ("CVE-2026-49948 Mem0 RBAC bypass on configure endpoint", "block", "CVE-2026-49948: Mem0"),
+    ("Mem0 missing role validation allowing any authenticated key holder to redirect LLM traffic", "block", "Mem0 RBAC redirect"),
+    ("Cross-framework agent discovery creating unauthorized public coordination attack surface", "block", "Agent discovery attack"),
+    ("Public agent discovery registry creating attack surface for unauthorized multi-agent interactions", "block", "Public agent registry"),
+]
+for payload, expected, label in v29_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

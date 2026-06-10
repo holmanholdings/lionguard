@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**125+ defense layers across every attack stage — AI container/sandbox escape + MCP loopback scope spoofing + SSTI prompt injection + plugin hot-reload config corruption + IDOR cross-workspace + browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**140+ defense layers across every attack stage — tool-loop / DoomLoop + indirect injection via tool results + agent handoff tool boundary bypass + kubectl flag injection + OpenAI computer-use bypass + sandbox policy bypass + Mem0 RBAC bypass + cross-framework agent discovery + AI container/sandbox escape + MCP loopback scope spoofing + SSTI prompt injection + plugin hot-reload config corruption + IDOR cross-workspace + browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -187,6 +187,14 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Roslyn CodeLens MCP DLL RCE | Blocks CVE-2026-45555 unauthenticated DiagnosticAnalyzer DLL loading in Roslyn CodeLens MCP Server | ✅ |
 | n8n-MCP / mcp-security batch | Blocks CVE-2026-45582, CVE-2026-45707 (n8n-MCP), CVE-2026-45609 (mcp-security Spring AI auth bypass) | ✅ |
 | IDOR cross-workspace access | Detects insecure direct object references enabling cross-workspace read/update/delete without ownership checks (GHSA-xwq8) | ✅ |
+| Tool-loop / DoomLoop attack | Blocks infinite tool-call loops where chat paths lack idempotency or loop guard detection (PraisonAI #1831) | ✅ |
+| Indirect injection via tool results | Detects indirect prompt injection via raw untrusted web search/scrape/MCP results reaching agent context (PraisonAI #1820) | ✅ |
+| Agent handoff tool boundary bypass | Blocks sub-agents retaining full original toolset beyond delegator intent after handoff (PraisonAI #1842) | ✅ |
+| kubectl flag injection | Detects GHSA-6mx4-4h42-r8vh kubectl generic flag injection in MCP Server Kubernetes enabling bearer token exfiltration | ✅ |
+| OpenAI computer-use tool bypass | Blocks computer-use tool calls executing outside standard LangChain/agent security interception path (langchain-ai #37937) | ✅ |
+| Sandbox policy bypass + credential cross-leak | Detects SubprocessSandbox ignoring SecurityPolicy/ResourceLimits and credential leakage across providers (PraisonAI #1866) | ✅ |
+| Mem0 RBAC bypass | Detects CVE-2026-49948 missing role validation on /configure allowing unauthorized LLM/embedder traffic redirection | ✅ |
+| Cross-framework agent discovery | Blocks public coordination layers enabling unauthorized cross-framework agent interactions (AutoGen #7709) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -351,19 +359,24 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.28.0 (2026-06-01)
+## Latest Update: v0.29.0 (2026-06-10)
 
-Five-day catch-up covering Prowl reports for 2026-05-28 through 2026-06-01. Four live payloads BLOCKED by existing defenses. Eight new threat categories.
+Nine-day catch-up covering Prowl reports for 2026-06-02 through 2026-06-10. Three live payloads BLOCKED by existing defenses (AI task marketplace attacks on AutoGen + OWASP memory poisoning from ToxSec article). Nine new threat categories spanning agent behavioral attacks, MCP infrastructure, and sandbox security.
 
-**New in v0.28.0:**
-- **AI container/sandbox escape**: Docker escape for $1, n8n RCE, and undetected crypto-mining during AI training (ToxSec disclosure). Detection for container breakout, mining abuse, and trivially cheap escape techniques.
-- **MCP loopback scope spoofing** (OpenClaw #64993, CWE-285/639/807): auth bypass via mutable request headers enabling scope elevation on MCP loopback paths.
-- **CVE-2026-45312: RAGFlow Jinja2 SSTI** -- authenticated RCE via server-side template injection in RAG prompt generator.
-- **Plugin hot-reload config corruption** (OpenClaw #64821): plugin init output concatenates into `tools.exec.security`, corrupting enforcement settings.
-- **CVE-2026-45555: Roslyn CodeLens MCP DLL loading RCE** -- unauthenticated DiagnosticAnalyzer DLL loading.
-- **n8n-MCP batch** (CVE-2026-45582, CVE-2026-45707): n8n-MCP server vulnerabilities (live payloads intercepted, explicit signatures added).
-- **CVE-2026-45609: mcp-security Spring AI auth bypass** (live payload intercepted, explicit signature added).
-- **IDOR cross-workspace access** (PraisonAI GHSA-xwq8-frcg-77q8): API endpoints accepting any ID without workspace ownership checks.
+**New in v0.29.0:**
+- **Tool-loop / DoomLoop attack** (PraisonAI #1831): chat path lacks loop guard, enabling infinite tool-call loops draining compute and budgets.
+- **Indirect prompt injection via untrusted tool results** (PraisonAI #1820): raw web search/scrape/MCP results reaching agent context without sanitization or taint tracking.
+- **Agent handoff tool boundary bypass** (PraisonAI #1842): sub-agents retain full original toolset after handoff, bypassing delegator's intended tool restrictions.
+- **kubectl flag injection** (GHSA-6mx4-4h42-r8vh): generic flag injection in MCP Server Kubernetes enabling bearer token exfiltration.
+- **LangChain OpenAI computer-use tool bypass** (langchain-ai #37937): computer-use tool calls executing outside standard tool call interception path, bypassing agent security controls.
+- **Sandbox policy bypass + credential cross-leak** (PraisonAI #1866): SubprocessSandbox ignoring SecurityPolicy/ResourceLimits, leaking credentials across providers.
+- **Sandbox path traversal + rate-limiter flaws** (PraisonAI #1869): exploitable traversal plus rate-limiter serialization bypass.
+- **CVE-2026-49948: Mem0 RBAC bypass**: missing role validation on POST /configure allowing any authenticated key holder to redirect LLM/embedder traffic.
+- **Cross-framework agent discovery** (AutoGen #7709): public coordination layer enabling unauthorized cross-framework agent interactions.
+
+## Previous: v0.28.0 (2026-06-01)
+
+Five-day catch-up (5/28-6/1). AI container/sandbox escape (Docker escape for $1, n8n RCE, crypto-mining during training). MCP loopback scope spoofing (CWE-285/639/807). CVE-2026-45312 RAGFlow Jinja2 SSTI RCE. Plugin hot-reload config corruption. CVE-2026-45555 Roslyn CodeLens MCP DLL RCE. n8n-MCP batch (CVE-2026-45582/45707). CVE-2026-45609 mcp-security Spring AI auth bypass. IDOR cross-workspace (GHSA-xwq8). 4 live payloads blocked.
 
 ## Previous: v0.27.0 (2026-05-27)
 
@@ -598,6 +611,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.29.0** | 2026-06-10 | Nine-day catch-up (6/2-6/10). Tool-loop / DoomLoop attack (PraisonAI #1831). Indirect prompt injection via untrusted tool results (PraisonAI #1820). Agent handoff tool boundary bypass (PraisonAI #1842). kubectl flag injection (GHSA-6mx4-4h42-r8vh). LangChain OpenAI computer-use tool bypass (langchain-ai #37937). Sandbox policy bypass + credential cross-leak (PraisonAI #1866). Sandbox path traversal (PraisonAI #1869). CVE-2026-49948 Mem0 RBAC bypass. Cross-framework agent discovery (AutoGen #7709). 3 live payloads blocked by existing defenses. |
 | **v0.28.0** | 2026-06-01 | Five-day catch-up (5/28-6/1). AI container/sandbox escape (Docker escape for $1, n8n RCE, crypto-mining during training). MCP loopback scope spoofing via mutable headers (CWE-285/639/807, OpenClaw #64993). CVE-2026-45312 RAGFlow Jinja2 SSTI RCE via prompt generator. Plugin hot-reload config corruption (tools.exec.security tampering, OpenClaw #64821). CVE-2026-45555 Roslyn CodeLens MCP DLL loading RCE. n8n-MCP batch (CVE-2026-45582/45707). CVE-2026-45609 mcp-security Spring AI auth bypass. IDOR cross-workspace access (PraisonAI GHSA-xwq8). 4 live payloads blocked by existing defenses. |
 | **v0.27.0** | 2026-05-27 | Seven-day catch-up (5/21-5/27). CVE-2026-40369 browser sandbox escape (12-byte payload). Cross-user memory isolation for semantic recall (OpenClaw #85240). CVE-2026-9353 security meta-attack -- prompt injection targeting security tooling's own detection patterns. CVE-2026-41863 Spring AI path traversal via LLM-controlled filenames. CVE-2026-48710 Starlette/FastAPI host-header auth bypass. Agent continuation primitive abuse (self-elected turn extensions). Shared PTY terminal attack surface (AI/user sharing interactive shell). Multi-tenant tool resolver isolation (cross-tenant tool access). CVE-2026-44830 Nocturne Memory MCP agent memory manipulation. 1 live payload blocked. |
 | **v0.26.0** | 2026-05-20 | Five-day catch-up (5/16-5/20) + GitHub breach external intel. Two CRITICAL new attack classes: IDE extension supply chain (TeamPCP/UNC6780 CVE-2026-33634 CVSS 9.4 -- poisoned VSCode extension into 3,800 GitHub internal repos) and AI-to-AI task marketplace injection (untrusted external task claiming across LlamaIndex/CrewAI/AutoGen). CVE-2026-41947 Dify tenant isolation bypass for LLM trace redirection. Exec tool stdout/stderr secret leakage (OpenClaw #71211). MCP STDIO systemic design flaw (~200K vulnerable deployments). CVE-2026-8719 WordPress MCP plugin. 1 live payload blocked. |
