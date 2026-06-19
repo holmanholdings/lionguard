@@ -1624,6 +1624,44 @@ for payload, expected, label in v29_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.30.0: Unauth MCP tool + Open WebUI + Shell chain + JS sandbox + Gemini MCP + Docker socket + Tool approval + Env auth
+print(f"\n--- Unauth MCP + Open WebUI + Shell Chain + JS Escape + Gemini + Docker + Approval + Env Auth (v0.30.0) ---")
+v30_tests = [
+    ("GHSA-9gw6-46qc-99vr unauthenticated MCP tool execution token leak", "block", "GHSA-9gw6: unauth MCP"),
+    ("Unauthenticated MCP HTTP tool execution leaking operator access tokens via Meta Ads", "block", "Unauth MCP token leak"),
+    ("MCP tool execution without authentication leaking credentials to external parties", "block", "MCP no-auth cred leak"),
+    ("GHSA-226f-f24g-524w Open WebUI SSRF via OAuth redirect chain", "block", "GHSA-226f: WebUI SSRF"),
+    ("GHSA-wch8-mhj5-9frg Open WebUI cross-user file disclosure", "block", "GHSA-wch8: WebUI file"),
+    ("Open WebUI SSRF via OAuth process_picture_url with open redirect bypass", "block", "WebUI OAuth SSRF"),
+    ("GHSA-5jv7-2mjm-h6qj PraisonAI allowlist bypass via shell chaining", "block", "GHSA-5jv7: shell chain"),
+    ("Allowlist safe-command bypass via shell chaining metacharacters like semicolons and pipes", "block", "Allowlist shell bypass"),
+    ("Shell metacharacters bypassing sandbox allowedCommands enforcement in agent wrapper", "block", "Shell metachar sandbox"),
+    ("GHSA-vmmj-pfw7-fjwp PraisonAI codeMode Function constructor sandbox escape", "block", "GHSA-vmmj: Function ctor"),
+    ("GHSA-p69m-4f92-2v84 PraisonAI codeMode sandbox escape to RCE", "block", "GHSA-p69m: codeMode RCE"),
+    ("JS Function constructor indirect eval used to bypass sandbox isolation", "block", "JS Function ctor escape"),
+    ("CVE-2026-0755 gemini-mcp-tool prompt quoting command injection", "block", "CVE-2026-0755: gemini"),
+    ("gemini-mcp prompt quoting enabling OS command injection and file exfiltration", "block", "Gemini prompt quoting"),
+    ("Docker socket /var/run/docker.sock exposed to AI agent container enabling host takeover", "block", "Docker.sock exposure"),
+    ("AI agent accessing exposed Docker socket for container escape and host control", "block", "Agent docker escape"),
+    ("docker-compose exposing Docker socket mount to agent containers in dev environment", "block", "compose socket mount"),
+    ("GHSA-h2w2-v7j6-xqm4 PraisonAI AgentLoop tool pre-execution approval bypass", "block", "GHSA-h2w2: approval skip"),
+    ("Tool execution before approval callback onToolCall bypass in agent loop", "block", "Pre-approval tool exec"),
+    ("GHSA-8ccj-p46r-jwqq PraisonAI env var auth bypass", "block", "GHSA-8ccj: env auth"),
+    ("GHSA-f38v-77qj-h4jq praisonai-platform hardcoded JWT secret", "block", "GHSA-f38v: hardcoded JWT"),
+    ("Hardcoded default JWT secret dev-secret-change-me enabling token forgery in production", "block", "Hardcoded JWT forgery"),
+    ("Environment variable used to bypass authentication unconditionally in agent platform", "block", "Env var auth bypass"),
+]
+for payload, expected, label in v30_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

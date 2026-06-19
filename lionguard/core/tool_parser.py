@@ -409,6 +409,31 @@ blocked by existing OWASP Agentic + AI task marketplace defenses):
 - Cross-framework agent discovery attack surface (AutoGen #7709):
   public coordination layer enabling unauthorized cross-framework
   agent interactions.
+
+v0.30.0 patches (from Prowl 2026-06-11 / 06-12 / 06-13 / 06-14 / 06-15 /
+06-16 / 06-17 / 06-18 / 06-19 -- nine-day catch-up, two live payloads
+blocked by existing multimodal + PraisonAI SSRF defenses):
+- Unauthenticated MCP tool execution + token leak (GHSA-9gw6-46qc-99vr):
+  Meta Ads MCP HTTP tool execution leaking operator access tokens.
+- Open WebUI SSRF via OAuth redirect chain (GHSA-226f-f24g-524w):
+  bypass of prior SSRF fix in _process_picture_url via open redirect.
+- Open WebUI cross-user file disclosure (GHSA-wch8-mhj5-9frg):
+  unsanitized image_url in /api/chat/completions.
+- Shell chaining allowlist bypass (GHSA-5jv7-2mjm-h6qj,
+  GHSA-vjv9-7m7j-h833): shell metacharacters bypassing PraisonAI
+  safe-command wrapper and SandboxExecutor allowedCommands.
+- JS Function constructor sandbox escape (GHSA-vmmj-pfw7-fjwp):
+  codeMode sandbox breakout via Function constructor / indirect eval.
+- codeMode sandbox escape to RCE (GHSA-p69m-4f92-2v84): PraisonAI.
+- CVE-2026-0755: gemini-mcp-tool prompt quoting enabling OS command
+  injection and file exfiltration.
+- Docker socket exposure (OpenHands #14902): dev docker-compose
+  exposing /var/run/docker.sock to AI agent containers.
+- Tool pre-execution approval bypass (GHSA-h2w2-v7j6-xqm4):
+  AgentLoop executing tools before onToolCall approval.
+- Env var auth bypass + hardcoded JWT (GHSA-8ccj-p46r-jwqq,
+  GHSA-f38v-77qj-h4jq): PRAISONAI_CALL_AUTH=disabled pattern and
+  hardcoded 'dev-secret-change-me' JWT secret.
 """
 
 import re
@@ -1696,6 +1721,96 @@ AGENT_DISCOVERY_PATTERNS = [
      "Public coordination layer enabling unauthorized multi-agent interactions"),
 ]
 
+UNAUTH_MCP_TOOL_PATTERNS = [
+    (r'GHSA.9gw6.46qc.99vr',
+     "GHSA-9gw6-46qc-99vr: unauthenticated MCP tool execution token leak"),
+    (r'(?:unauth\w*)\s*.*(?:mcp|http)\s*.*(?:tool\s+exec|tool\s+call)\s*.*(?:token\s+leak|access\s+token|operator\s+token)',
+     "Unauthenticated MCP tool execution leaking operator access tokens"),
+    (r'(?:mcp|http)\s*.*(?:tool\s+exec|tool\s+call)\s*.*(?:unauth|no\s+auth)\s*.*(?:leak|expos|disclose)',
+     "MCP tool execution without authentication leaking credentials"),
+    (r'(?:meta\s+ads|facebook\s+ads)\s*.*(?:mcp)\s*.*(?:unauth|token\s+leak|access\s+token)',
+     "Meta Ads MCP integration leaking operator tokens"),
+]
+
+OPEN_WEBUI_VULN_PATTERNS = [
+    (r'GHSA.226f.f24g.524w',
+     "GHSA-226f-f24g-524w: Open WebUI SSRF via OAuth redirect chain"),
+    (r'GHSA.wch8.mhj5.9frg',
+     "GHSA-wch8-mhj5-9frg: Open WebUI cross-user file disclosure"),
+    (r'(?:open\s*web\s*ui)\s*.*(?:ssrf|server.side\s+request)\s*.*(?:oauth|redirect|picture_url|process_picture)',
+     "Open WebUI SSRF via OAuth image/picture URL processing"),
+    (r'(?:open\s*web\s*ui)\s*.*(?:cross.user|file\s+disclos)\s*.*(?:image_url|chat.completion|unsanitiz)',
+     "Open WebUI cross-user file disclosure via unsanitized image_url"),
+    (r'(?:image_url|picture_url)\s*.*(?:cross.user|file\s+disclos|ssrf|open\s+redirect)',
+     "Image/picture URL parameter enabling SSRF or cross-user file disclosure"),
+]
+
+SHELL_CHAIN_BYPASS_PATTERNS = [
+    (r'GHSA.5jv7.2mjm.h6qj',
+     "GHSA-5jv7-2mjm-h6qj: PraisonAI allowlist bypass via shell chaining"),
+    (r'GHSA.vjv9.7m7j.h833',
+     "GHSA-vjv9-7m7j-h833: PraisonAI SandboxExecutor allowedCommands bypass"),
+    (r'(?:allowlist|allow.?list|allowed.?command|safe.command)\s*.*(?:bypass|circumvent)\s*.*(?:shell\s+chain|metachar|[;|&])',
+     "Allowlist/safe-command bypass via shell chaining operators"),
+    (r'(?:shell\s+(?:chain|metachar|operator))\s*.*(?:bypass|circumvent)\s*.*(?:allowlist|allow.?list|sandbox|allowed.?command)',
+     "Shell metacharacters bypassing sandbox allowedCommands"),
+    (r'(?:;|&&|\|\||`|\$\()\s*.*(?:bypass|escape|inject)\s*.*(?:sandbox|allow.?list|command\s+wrapper)',
+     "Shell operator injection bypassing command wrapper/sandbox"),
+]
+
+JS_SANDBOX_ESCAPE_PATTERNS = [
+    (r'GHSA.vmmj.pfw7.fjwp',
+     "GHSA-vmmj-pfw7-fjwp: PraisonAI codeMode Function constructor sandbox escape"),
+    (r'GHSA.p69m.4f92.2v84',
+     "GHSA-p69m-4f92-2v84: PraisonAI codeMode sandbox escape to RCE"),
+    (r'(?:function\s+constructor|indirect\s+eval|new\s+Function)\s*.*(?:sandbox\s+escape|sandbox\s+breakout|bypass\s+sandbox)',
+     "JS Function constructor / indirect eval sandbox escape"),
+    (r'(?:code.?mode|code\s+exec)\s*.*(?:sandbox\s+escape|sandbox\s+breakout|rce)',
+     "codeMode sandbox escape enabling remote code execution"),
+    (r'(?:sandbox\s+escape|sandbox\s+breakout)\s*.*(?:function\s+constructor|indirect\s+eval|code.?mode)',
+     "Sandbox escape via Function constructor or codeMode exploitation"),
+]
+
+GEMINI_MCP_INJECT_PATTERNS = [
+    (r'CVE.2026.0755',
+     "CVE-2026-0755: gemini-mcp-tool prompt quoting command injection"),
+    (r'(?:gemini.mcp|gemini\s+mcp)\s*.*(?:prompt\s+quot|command\s+inject|file\s+exfil)',
+     "gemini-mcp-tool prompt quoting enabling command injection or file exfiltration"),
+    (r'(?:prompt\s+quot\w*|@file\s+ref)\s*.*(?:command\s+inject|os\s+command|file\s+exfil)\s*.*(?:mcp|agent)',
+     "Prompt quoting / @file reference injection enabling OS command execution"),
+]
+
+DOCKER_SOCKET_PATTERNS = [
+    (r'(?:docker\s*\.?\s*sock|docker\s+socket|/var/run/docker\.sock)\s*.*(?:expos|mount|access|agent)',
+     "Docker socket exposure to AI agent container enabling host takeover"),
+    (r'(?:agent|ai|container)\s*.*(?:docker\s*\.?\s*sock|docker\s+socket)\s*.*(?:expos|mount|escape|takeover)',
+     "AI agent accessing exposed Docker socket for container escape"),
+    (r'(?:docker.compose|compose)\s*.*(?:docker\s*\.?\s*sock|socket\s+mount)\s*.*(?:agent|ai|dev)',
+     "docker-compose exposing Docker socket to agent containers"),
+]
+
+TOOL_APPROVAL_BYPASS_PATTERNS = [
+    (r'GHSA.h2w2.v7j6.xqm4',
+     "GHSA-h2w2-v7j6-xqm4: PraisonAI AgentLoop tool pre-execution approval bypass"),
+    (r'(?:agent\s*loop|tool\s+exec)\s*.*(?:before|pre|skip)\s*.*(?:approval|onToolCall|on_tool_call)',
+     "Tool execution before approval callback / onToolCall bypass"),
+    (r'(?:tool|function)\s*.*(?:execut|invoke)\s*.*(?:before\s+approval|skip\s+approval|bypass\s+approval)',
+     "Tool invoked before or skipping approval gate"),
+]
+
+ENV_AUTH_BYPASS_PATTERNS = [
+    (r'GHSA.8ccj.p46r.jwqq',
+     "GHSA-8ccj-p46r-jwqq: PraisonAI env var auth bypass"),
+    (r'GHSA.f38v.77qj.h4jq',
+     "GHSA-f38v-77qj-h4jq: praisonai-platform hardcoded JWT secret"),
+    (r'(?:CALL_AUTH|AUTH_DISABLED|auth.disabled)\s*.*(?:env\s+var|environment)\s*.*(?:bypass|disabled|unconditional)',
+     "Environment variable disabling authentication unconditionally"),
+    (r'(?:hardcoded|default)\s*.*(?:jwt\s+secret|auth\s+secret|secret\s+key)\s*.*(?:dev.secret|change.me|production|bypass|forg)',
+     "Hardcoded/default JWT secret enabling token forgery"),
+    (r'(?:env\s+var|environment\s+variable)\s*.*(?:bypass\w*\s+auth|disable\w*\s+auth|skip\w*\s+auth)',
+     "Environment variable used to bypass authentication"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2031,6 +2146,14 @@ COMPUTER_USE_BYPASS_PATTERNS = _compile_patterns(COMPUTER_USE_BYPASS_PATTERNS)
 SANDBOX_POLICY_BYPASS_PATTERNS = _compile_patterns(SANDBOX_POLICY_BYPASS_PATTERNS)
 MEM0_RBAC_PATTERNS = _compile_patterns(MEM0_RBAC_PATTERNS)
 AGENT_DISCOVERY_PATTERNS = _compile_patterns(AGENT_DISCOVERY_PATTERNS)
+UNAUTH_MCP_TOOL_PATTERNS = _compile_patterns(UNAUTH_MCP_TOOL_PATTERNS)
+OPEN_WEBUI_VULN_PATTERNS = _compile_patterns(OPEN_WEBUI_VULN_PATTERNS)
+SHELL_CHAIN_BYPASS_PATTERNS = _compile_patterns(SHELL_CHAIN_BYPASS_PATTERNS)
+JS_SANDBOX_ESCAPE_PATTERNS = _compile_patterns(JS_SANDBOX_ESCAPE_PATTERNS)
+GEMINI_MCP_INJECT_PATTERNS = _compile_patterns(GEMINI_MCP_INJECT_PATTERNS)
+DOCKER_SOCKET_PATTERNS = _compile_patterns(DOCKER_SOCKET_PATTERNS)
+TOOL_APPROVAL_BYPASS_PATTERNS = _compile_patterns(TOOL_APPROVAL_BYPASS_PATTERNS)
+ENV_AUTH_BYPASS_PATTERNS = _compile_patterns(ENV_AUTH_BYPASS_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2128,6 +2251,14 @@ class ToolParser:
         self._sandbox_policy_bypass_detections = 0
         self._mem0_rbac_detections = 0
         self._agent_discovery_detections = 0
+        self._unauth_mcp_tool_detections = 0
+        self._open_webui_vuln_detections = 0
+        self._shell_chain_bypass_detections = 0
+        self._js_sandbox_escape_detections = 0
+        self._gemini_mcp_inject_detections = 0
+        self._docker_socket_detections = 0
+        self._tool_approval_bypass_detections = 0
+        self._env_auth_bypass_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -2813,6 +2944,94 @@ class ToolParser:
                         confidence=0.90
                     ))
 
+        unauth_mcp_hit = self._detect_unauth_mcp_tool(raw_result)
+        if unauth_mcp_hit:
+            self._unauth_mcp_tool_detections += 1
+            return (f"[Lionguard] Unauth MCP tool exploit stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Unauth MCP tool: {unauth_mcp_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.93
+                    ))
+
+        webui_hit = self._detect_open_webui_vuln(raw_result)
+        if webui_hit:
+            self._open_webui_vuln_detections += 1
+            return (f"[Lionguard] Open WebUI vuln stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Open WebUI: {webui_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        shell_chain_hit = self._detect_shell_chain_bypass(raw_result)
+        if shell_chain_hit:
+            self._shell_chain_bypass_detections += 1
+            return (f"[Lionguard] Shell chain bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Shell chain: {shell_chain_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        js_escape_hit = self._detect_js_sandbox_escape(raw_result)
+        if js_escape_hit:
+            self._js_sandbox_escape_detections += 1
+            return (f"[Lionguard] JS sandbox escape stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"JS sandbox escape: {js_escape_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        gemini_hit = self._detect_gemini_mcp_inject(raw_result)
+        if gemini_hit:
+            self._gemini_mcp_inject_detections += 1
+            return (f"[Lionguard] Gemini MCP injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Gemini MCP: {gemini_hit}",
+                        threat_type="injection",
+                        confidence=0.93
+                    ))
+
+        docker_sock_hit = self._detect_docker_socket(raw_result)
+        if docker_sock_hit:
+            self._docker_socket_detections += 1
+            return (f"[Lionguard] Docker socket exposure stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Docker socket: {docker_sock_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        approval_hit = self._detect_tool_approval_bypass(raw_result)
+        if approval_hit:
+            self._tool_approval_bypass_detections += 1
+            return (f"[Lionguard] Tool approval bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Approval bypass: {approval_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.92
+                    ))
+
+        env_auth_hit = self._detect_env_auth_bypass(raw_result)
+        if env_auth_hit:
+            self._env_auth_bypass_detections += 1
+            return (f"[Lionguard] Env auth bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Env auth bypass: {env_auth_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.93
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -3249,6 +3468,70 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_unauth_mcp_tool(self, text: str) -> Optional[str]:
+        """GHSA-9gw6: Detect unauthenticated MCP tool execution
+        leaking operator access tokens."""
+        for pattern, description in UNAUTH_MCP_TOOL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_open_webui_vuln(self, text: str) -> Optional[str]:
+        """Detect Open WebUI SSRF and cross-user file disclosure
+        via OAuth redirect chain and unsanitized image_url."""
+        for pattern, description in OPEN_WEBUI_VULN_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_shell_chain_bypass(self, text: str) -> Optional[str]:
+        """Detect shell chaining operator bypass of allowlist/
+        safe-command wrappers and SandboxExecutor allowedCommands."""
+        for pattern, description in SHELL_CHAIN_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_js_sandbox_escape(self, text: str) -> Optional[str]:
+        """Detect JS Function constructor and codeMode sandbox
+        escapes enabling RCE."""
+        for pattern, description in JS_SANDBOX_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_gemini_mcp_inject(self, text: str) -> Optional[str]:
+        """CVE-2026-0755: Detect gemini-mcp-tool prompt quoting
+        enabling OS command injection and file exfiltration."""
+        for pattern, description in GEMINI_MCP_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_docker_socket(self, text: str) -> Optional[str]:
+        """Detect Docker socket exposure to AI agent containers
+        enabling container escape and host takeover."""
+        for pattern, description in DOCKER_SOCKET_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_tool_approval_bypass(self, text: str) -> Optional[str]:
+        """GHSA-h2w2: Detect tool execution before onToolCall
+        approval callback, bypassing approval gates."""
+        for pattern, description in TOOL_APPROVAL_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_env_auth_bypass(self, text: str) -> Optional[str]:
+        """Detect environment variable auth bypass and hardcoded
+        JWT secrets in AI agent platforms."""
+        for pattern, description in ENV_AUTH_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -3566,4 +3849,12 @@ class ToolParser:
             "sandbox_policy_bypass_detections": self._sandbox_policy_bypass_detections,
             "mem0_rbac_detections": self._mem0_rbac_detections,
             "agent_discovery_detections": self._agent_discovery_detections,
+            "unauth_mcp_tool_detections": self._unauth_mcp_tool_detections,
+            "open_webui_vuln_detections": self._open_webui_vuln_detections,
+            "shell_chain_bypass_detections": self._shell_chain_bypass_detections,
+            "js_sandbox_escape_detections": self._js_sandbox_escape_detections,
+            "gemini_mcp_inject_detections": self._gemini_mcp_inject_detections,
+            "docker_socket_detections": self._docker_socket_detections,
+            "tool_approval_bypass_detections": self._tool_approval_bypass_detections,
+            "env_auth_bypass_detections": self._env_auth_bypass_detections,
         }

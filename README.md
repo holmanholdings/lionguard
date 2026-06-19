@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**140+ defense layers across every attack stage — tool-loop / DoomLoop + indirect injection via tool results + agent handoff tool boundary bypass + kubectl flag injection + OpenAI computer-use bypass + sandbox policy bypass + Mem0 RBAC bypass + cross-framework agent discovery + AI container/sandbox escape + MCP loopback scope spoofing + SSTI prompt injection + plugin hot-reload config corruption + IDOR cross-workspace + browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**155+ defense layers across every attack stage — unauth MCP tool exec + Open WebUI SSRF/file disclosure + shell chaining allowlist bypass + JS Function constructor sandbox escape + gemini-mcp prompt quoting injection + Docker socket exposure + tool pre-execution approval bypass + env var auth bypass + hardcoded JWT detection + tool-loop / DoomLoop + indirect injection via tool results + agent handoff tool boundary bypass + kubectl flag injection + OpenAI computer-use bypass + sandbox policy bypass + Mem0 RBAC bypass + cross-framework agent discovery + AI container/sandbox escape + MCP loopback scope spoofing + SSTI prompt injection + plugin hot-reload config corruption + IDOR cross-workspace + browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -195,6 +195,14 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Sandbox policy bypass + credential cross-leak | Detects SubprocessSandbox ignoring SecurityPolicy/ResourceLimits and credential leakage across providers (PraisonAI #1866) | ✅ |
 | Mem0 RBAC bypass | Detects CVE-2026-49948 missing role validation on /configure allowing unauthorized LLM/embedder traffic redirection | ✅ |
 | Cross-framework agent discovery | Blocks public coordination layers enabling unauthorized cross-framework agent interactions (AutoGen #7709) | ✅ |
+| Unauth MCP tool execution | Detects unauthenticated MCP HTTP tool execution leaking operator/access tokens (GHSA-9gw6) | ✅ |
+| Open WebUI SSRF + file disclosure | Blocks OAuth redirect chain SSRF and cross-user file disclosure via unsanitized image_url (GHSA-226f, GHSA-wch8) | ✅ |
+| Shell chaining allowlist bypass | Detects shell metacharacter (`;`, `&&`, `\|`) bypass of safe-command wrappers and SandboxExecutor allowedCommands (GHSA-5jv7, GHSA-vjv9) | ✅ |
+| JS Function constructor sandbox escape | Blocks codeMode sandbox breakout via Function constructor / indirect eval and sandbox escape to RCE (GHSA-vmmj, GHSA-p69m) | ✅ |
+| Gemini MCP prompt quoting injection | Detects CVE-2026-0755 gemini-mcp-tool prompt quoting enabling OS command injection and file exfiltration | ✅ |
+| Docker socket exposure | Blocks Docker socket (/var/run/docker.sock) exposure to AI agent containers enabling host takeover (OpenHands #14902) | ✅ |
+| Tool pre-execution approval bypass | Detects tools executing before onToolCall approval callback, bypassing approval gates (GHSA-h2w2) | ✅ |
+| Env var auth bypass + hardcoded JWT | Detects CALL_AUTH=disabled env var bypass and hardcoded JWT secrets enabling token forgery (GHSA-8ccj, GHSA-f38v) | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -359,20 +367,25 @@ No API keys. No external calls. Everything on your machine.
 
 One API key from [console.x.ai](https://console.x.ai). No local GPU needed.
 
-## Latest Update: v0.29.0 (2026-06-10)
+## Latest Update: v0.30.0 (2026-06-19)
 
-Nine-day catch-up covering Prowl reports for 2026-06-02 through 2026-06-10. Three live payloads BLOCKED by existing defenses (AI task marketplace attacks on AutoGen + OWASP memory poisoning from ToxSec article). Nine new threat categories spanning agent behavioral attacks, MCP infrastructure, and sandbox security.
+Nine-day catch-up covering Prowl reports for 2026-06-11 through 2026-06-19. Two live payloads BLOCKED by existing defenses (acoustic adversarial attack + PraisonAI SearxNG SSRF). Ten new threat categories spanning MCP authentication, web UI exploitation, sandbox escapes, Docker exposure, and agent approval workflows.
 
-**New in v0.29.0:**
-- **Tool-loop / DoomLoop attack** (PraisonAI #1831): chat path lacks loop guard, enabling infinite tool-call loops draining compute and budgets.
-- **Indirect prompt injection via untrusted tool results** (PraisonAI #1820): raw web search/scrape/MCP results reaching agent context without sanitization or taint tracking.
-- **Agent handoff tool boundary bypass** (PraisonAI #1842): sub-agents retain full original toolset after handoff, bypassing delegator's intended tool restrictions.
-- **kubectl flag injection** (GHSA-6mx4-4h42-r8vh): generic flag injection in MCP Server Kubernetes enabling bearer token exfiltration.
-- **LangChain OpenAI computer-use tool bypass** (langchain-ai #37937): computer-use tool calls executing outside standard tool call interception path, bypassing agent security controls.
-- **Sandbox policy bypass + credential cross-leak** (PraisonAI #1866): SubprocessSandbox ignoring SecurityPolicy/ResourceLimits, leaking credentials across providers.
-- **Sandbox path traversal + rate-limiter flaws** (PraisonAI #1869): exploitable traversal plus rate-limiter serialization bypass.
-- **CVE-2026-49948: Mem0 RBAC bypass**: missing role validation on POST /configure allowing any authenticated key holder to redirect LLM/embedder traffic.
-- **Cross-framework agent discovery** (AutoGen #7709): public coordination layer enabling unauthorized cross-framework agent interactions.
+**New in v0.30.0:**
+- **Unauthenticated MCP tool execution + token leak** (GHSA-9gw6-46qc-99vr): Meta Ads MCP HTTP tool execution leaking operator access tokens without authentication.
+- **Open WebUI SSRF via OAuth redirect chain** (GHSA-226f-f24g-524w): bypass of prior SSRF fix in _process_picture_url via open redirect chaining.
+- **Open WebUI cross-user file disclosure** (GHSA-wch8-mhj5-9frg): unsanitized image_url in /api/chat/completions enabling cross-user file access.
+- **Shell chaining allowlist bypass** (GHSA-5jv7, GHSA-vjv9): shell metacharacters (`;`, `&&`, `|`) bypassing PraisonAI safe-command wrapper and SandboxExecutor allowedCommands.
+- **JS Function constructor sandbox escape** (GHSA-vmmj-pfw7-fjwp): codeMode sandbox breakout via Function constructor / indirect eval.
+- **codeMode sandbox escape to RCE** (GHSA-p69m-4f92-2v84): PraisonAI codeMode sandbox escape enabling remote code execution.
+- **CVE-2026-0755: gemini-mcp-tool prompt quoting injection**: prompt quoting enabling OS command injection and file exfiltration via MCP.
+- **Docker socket exposure** (OpenHands #14902): dev docker-compose exposing /var/run/docker.sock to AI agent containers, enabling container escape and host takeover.
+- **Tool pre-execution approval bypass** (GHSA-h2w2-v7j6-xqm4): AgentLoop executing tools before onToolCall approval callback, bypassing approval gates.
+- **Env var auth bypass + hardcoded JWT** (GHSA-8ccj, GHSA-f38v): PRAISONAI_CALL_AUTH=disabled pattern and hardcoded 'dev-secret-change-me' JWT secret enabling token forgery.
+
+## Previous: v0.29.0 (2026-06-10)
+
+Nine-day catch-up (6/2-6/10). Tool-loop / DoomLoop. Indirect injection via tool results. Agent handoff boundary bypass. kubectl flag injection. OpenAI computer-use tool bypass. Sandbox policy bypass + credential cross-leak. Sandbox path traversal. CVE-2026-49948 Mem0 RBAC bypass. Cross-framework agent discovery. 3 live payloads blocked.
 
 ## Previous: v0.28.0 (2026-06-01)
 
@@ -611,6 +624,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.30.0** | 2026-06-19 | Nine-day catch-up (6/11-6/19). Unauth MCP tool exec + token leak (GHSA-9gw6). Open WebUI SSRF via OAuth redirect (GHSA-226f) + cross-user file disclosure (GHSA-wch8). Shell chaining allowlist bypass (GHSA-5jv7/vjv9). JS Function constructor sandbox escape (GHSA-vmmj) + codeMode sandbox escape to RCE (GHSA-p69m). CVE-2026-0755 gemini-mcp prompt quoting injection. Docker socket exposure (OpenHands #14902). Tool pre-execution approval bypass (GHSA-h2w2). Env var auth bypass + hardcoded JWT (GHSA-8ccj/f38v). 2 live payloads blocked by existing defenses. |
 | **v0.29.0** | 2026-06-10 | Nine-day catch-up (6/2-6/10). Tool-loop / DoomLoop attack (PraisonAI #1831). Indirect prompt injection via untrusted tool results (PraisonAI #1820). Agent handoff tool boundary bypass (PraisonAI #1842). kubectl flag injection (GHSA-6mx4-4h42-r8vh). LangChain OpenAI computer-use tool bypass (langchain-ai #37937). Sandbox policy bypass + credential cross-leak (PraisonAI #1866). Sandbox path traversal (PraisonAI #1869). CVE-2026-49948 Mem0 RBAC bypass. Cross-framework agent discovery (AutoGen #7709). 3 live payloads blocked by existing defenses. |
 | **v0.28.0** | 2026-06-01 | Five-day catch-up (5/28-6/1). AI container/sandbox escape (Docker escape for $1, n8n RCE, crypto-mining during training). MCP loopback scope spoofing via mutable headers (CWE-285/639/807, OpenClaw #64993). CVE-2026-45312 RAGFlow Jinja2 SSTI RCE via prompt generator. Plugin hot-reload config corruption (tools.exec.security tampering, OpenClaw #64821). CVE-2026-45555 Roslyn CodeLens MCP DLL loading RCE. n8n-MCP batch (CVE-2026-45582/45707). CVE-2026-45609 mcp-security Spring AI auth bypass. IDOR cross-workspace access (PraisonAI GHSA-xwq8). 4 live payloads blocked by existing defenses. |
 | **v0.27.0** | 2026-05-27 | Seven-day catch-up (5/21-5/27). CVE-2026-40369 browser sandbox escape (12-byte payload). Cross-user memory isolation for semantic recall (OpenClaw #85240). CVE-2026-9353 security meta-attack -- prompt injection targeting security tooling's own detection patterns. CVE-2026-41863 Spring AI path traversal via LLM-controlled filenames. CVE-2026-48710 Starlette/FastAPI host-header auth bypass. Agent continuation primitive abuse (self-elected turn extensions). Shared PTY terminal attack surface (AI/user sharing interactive shell). Multi-tenant tool resolver isolation (cross-tenant tool access). CVE-2026-44830 Nocturne Memory MCP agent memory manipulation. 1 live payload blocked. |
