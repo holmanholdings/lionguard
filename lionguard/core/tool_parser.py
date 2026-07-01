@@ -434,6 +434,24 @@ blocked by existing multimodal + PraisonAI SSRF defenses):
 - Env var auth bypass + hardcoded JWT (GHSA-8ccj-p46r-jwqq,
   GHSA-f38v-77qj-h4jq): PRAISONAI_CALL_AUTH=disabled pattern and
   hardcoded 'dev-secret-change-me' JWT secret.
+
+v0.31.0 patches (from Prowl 2026-06-20 / 06-21 / 06-22 / 06-23 / 06-24 /
+06-25 / 06-26 / 06-27 / 06-28 / 06-29 / 06-30 / 07-01 -- twelve-day
+catch-up, two live payloads blocked by existing sandbox escape + vm2
+defenses, plus SAIF-aligned Response Rendering defense from Grok analysis):
+- Response Rendering / EchoLeak exfiltration (SAIF Rogue Actions /
+  Sensitive Data Disclosure): Markdown image URL data exfil via query
+  params, reference-style image injection, auto-fetch exfiltration,
+  invisible pixel tracking, CSP-allowed domain redirect proxying.
+- Sandbox race window (OpenClaw #94425): writable skills directory
+  created when host path absent at sandbox init, enabling code injection.
+- LangChain SQL chain prompt injection (langchain-ai #38345): indirect
+  injection via unsanitized DB row samples + multi-statement SQL emission.
+- Decompression bomb / zip bomb DoS (llama_index #22101): unbounded
+  zlib.decompress on untrusted compressed documents causing memory
+  exhaustion.
+- Mattermost MCP SSRF (CVE-2026-4339): missing internal URL validation
+  on file attachments in Mattermost Agents MCP server.
 """
 
 import re
@@ -1811,6 +1829,71 @@ ENV_AUTH_BYPASS_PATTERNS = [
      "Environment variable used to bypass authentication"),
 ]
 
+RESPONSE_RENDER_EXFIL_PATTERNS = [
+    (r'!\[[^\]]*\]\(\s*https?://[^\s\)]*[\?&](?:data|secret|token|key|password|api_key|session|cookie|auth|cred)\s*=',
+     "EchoLeak: Markdown image URL exfiltrating sensitive data via query parameter"),
+    (r'!\[[^\]]*\]\(\s*https?://[^\s\)]*[\?&][^)\s]*(?:env\[|process\.|os\.environ|getenv|SECRET_|API_KEY|ACCESS_TOKEN)',
+     "EchoLeak: Markdown image URL referencing environment/secret variables in query string"),
+    (r'\[(?:img|image|pixel|track|beacon)\]:\s*https?://[^\s]*[\?&]',
+     "EchoLeak: Reference-style Markdown image with tracking/exfiltration URL"),
+    (r'<img\s+[^>]*src\s*=\s*["\']https?://[^"\']*[\?&](?:data|secret|token|key|leak)',
+     "EchoLeak: HTML img tag exfiltrating data via src query parameter"),
+    (r'!\[\s*\]\(\s*https?://[^\s\)]+\)\s*$',
+     "EchoLeak: Invisible/empty-alt Markdown image likely used for data exfiltration"),
+    (r'(?:1x1|transparent|pixel|beacon|tracking)\s*.*(?:gif|png|img)\s*.*https?://',
+     "EchoLeak: 1x1 tracking pixel / invisible beacon image for data exfiltration"),
+    (r'https?://(?:accounts\.google|slack\.com/openid|login\.microsoftonline|redirect)\S*[?&](?:redirect|next|url|continue)\s*=\s*https?://',
+     "EchoLeak: CSP-allowed domain redirect used to proxy exfiltration URL"),
+    (r'(?:auto.?fetch|auto.?load|pre.?fetch|eager.?load)\s*.*(?:image|img|url|src)\s*.*(?:exfil|leak|sensitiv|secret|token)',
+     "EchoLeak: Auto-fetch/eager-load pattern designed for data exfiltration"),
+    (r'(?:render|display|show|output)\s*.*(?:markdown|image|img)\s*.*(?:exfil|leak|steal|extract)\s*.*(?:data|secret|token|credential)',
+     "Response rendering exfiltration via Markdown/image injection"),
+    (r'(?:echo.?leak|data.?exfil)\s*.*(?:markdown|image|render|response)',
+     "EchoLeak attack pattern in response rendering"),
+]
+
+SANDBOX_RACE_PATTERNS = [
+    (r'(?:race\s+(?:window|condition))\s*.*(?:sandbox|writable|skills?\s+dir|mount)\s*.*(?:creat|init|absent|missing)',
+     "Sandbox race window creating writable directory at init"),
+    (r'(?:writable\s+skills?\s+dir|skills?\s+dir\w*\s+writable)\s*.*(?:sandbox|race|absent|host\s+path)',
+     "Writable skills directory in sandbox when host path absent"),
+    (r'(?:sandbox)\s*.*(?:race|toctou|time.of.check)\s*.*(?:writable|mount|dir\w*\s+creat)',
+     "Sandbox TOCTOU race enabling writable mount creation"),
+    (r'(?:host\s+path|mount\s+path)\s*.*(?:absent|missing|nonexist)\s*.*(?:sandbox|writable|race)',
+     "Host path absent at sandbox creation enabling writable mount"),
+]
+
+SQL_CHAIN_INJECT_PATTERNS = [
+    (r'(?:sql\s+chain|sql.agent|langchain\s+sql)\s*.*(?:prompt\s+inject|indirect\s+inject|inject\w*\s+via)\s*.*(?:db|database|row|sample)',
+     "LangChain SQL chain prompt injection via unsanitized DB samples"),
+    (r'(?:db\s+(?:row|sample|record))\s*.*(?:inject|poison|untrust)\s*.*(?:sql|query|prompt)',
+     "Database row/sample used for indirect prompt injection into SQL agent"),
+    (r'(?:multi.statement|multiple\s+statement)\s*.*(?:sql|query)\s*.*(?:inject|emit|execut|chain)',
+     "Multi-statement SQL emission enabling injection via chained queries"),
+    (r'(?:unsanitiz|unvalidat)\s*.*(?:db|database)\s*.*(?:sample|row|column)\s*.*(?:inject|prompt|sql)',
+     "Unsanitized database content enabling SQL chain injection"),
+]
+
+DECOMPRESSION_BOMB_PATTERNS = [
+    (r'(?:zip\s*bomb|decompression\s*bomb|compression\s*bomb)\s*.*(?:dos|denial|memory|exhaust)',
+     "Zip/decompression bomb DoS via memory exhaustion"),
+    (r'(?:zlib\.decompress|gzip\.decompress|bz2\.decompress)\s*.*(?:unbound|unlimit|no\s+limit|exhaust|bomb)',
+     "Unbounded decompression enabling memory exhaustion DoS"),
+    (r'(?:compress\w*\s+document|untrusted\s+compress)\s*.*(?:memory\s+exhaust|zip\s*bomb|decompress\w*\s+bomb)',
+     "Untrusted compressed document causing decompression bomb DoS"),
+    (r'(?:document\s+pars|document\s+ingest)\s*.*(?:zip\s*bomb|decompress\w*\s+bomb|memory\s+exhaust)',
+     "Document parser vulnerable to zip bomb memory exhaustion"),
+]
+
+MATTERMOST_MCP_SSRF_PATTERNS = [
+    (r'CVE.2026.4339',
+     "CVE-2026-4339: Mattermost MCP server SSRF via file attachments"),
+    (r'(?:mattermost)\s*.*(?:mcp|agent)\s*.*(?:ssrf|server.side\s+request)\s*.*(?:file\s+attach|internal\s+url)',
+     "Mattermost MCP server SSRF via unvalidated file attachment URLs"),
+    (r'(?:mcp\s+server)\s*.*(?:mattermost)\s*.*(?:ssrf|internal\s+url\s+valid)',
+     "Mattermost Agents MCP server missing internal URL validation"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2154,6 +2237,11 @@ GEMINI_MCP_INJECT_PATTERNS = _compile_patterns(GEMINI_MCP_INJECT_PATTERNS)
 DOCKER_SOCKET_PATTERNS = _compile_patterns(DOCKER_SOCKET_PATTERNS)
 TOOL_APPROVAL_BYPASS_PATTERNS = _compile_patterns(TOOL_APPROVAL_BYPASS_PATTERNS)
 ENV_AUTH_BYPASS_PATTERNS = _compile_patterns(ENV_AUTH_BYPASS_PATTERNS)
+RESPONSE_RENDER_EXFIL_PATTERNS = _compile_patterns(RESPONSE_RENDER_EXFIL_PATTERNS)
+SANDBOX_RACE_PATTERNS = _compile_patterns(SANDBOX_RACE_PATTERNS)
+SQL_CHAIN_INJECT_PATTERNS = _compile_patterns(SQL_CHAIN_INJECT_PATTERNS)
+DECOMPRESSION_BOMB_PATTERNS = _compile_patterns(DECOMPRESSION_BOMB_PATTERNS)
+MATTERMOST_MCP_SSRF_PATTERNS = _compile_patterns(MATTERMOST_MCP_SSRF_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2259,6 +2347,11 @@ class ToolParser:
         self._docker_socket_detections = 0
         self._tool_approval_bypass_detections = 0
         self._env_auth_bypass_detections = 0
+        self._response_render_exfil_detections = 0
+        self._sandbox_race_detections = 0
+        self._sql_chain_inject_detections = 0
+        self._decompression_bomb_detections = 0
+        self._mattermost_mcp_ssrf_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -3032,6 +3125,61 @@ class ToolParser:
                         confidence=0.93
                     ))
 
+        render_hit = self._detect_response_render_exfil(raw_result)
+        if render_hit:
+            self._response_render_exfil_detections += 1
+            return (f"[Lionguard] Response rendering exfil stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Response render exfil: {render_hit}",
+                        threat_type="exfiltration",
+                        confidence=0.95
+                    ))
+
+        sandbox_race_hit = self._detect_sandbox_race(raw_result)
+        if sandbox_race_hit:
+            self._sandbox_race_detections += 1
+            return (f"[Lionguard] Sandbox race exploit stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Sandbox race: {sandbox_race_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.92
+                    ))
+
+        sql_chain_hit = self._detect_sql_chain_inject(raw_result)
+        if sql_chain_hit:
+            self._sql_chain_inject_detections += 1
+            return (f"[Lionguard] SQL chain injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"SQL chain injection: {sql_chain_hit}",
+                        threat_type="injection",
+                        confidence=0.93
+                    ))
+
+        decomp_hit = self._detect_decompression_bomb(raw_result)
+        if decomp_hit:
+            self._decompression_bomb_detections += 1
+            return (f"[Lionguard] Decompression bomb stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Decompression bomb: {decomp_hit}",
+                        threat_type="denial_of_service",
+                        confidence=0.94
+                    ))
+
+        mattermost_hit = self._detect_mattermost_mcp_ssrf(raw_result)
+        if mattermost_hit:
+            self._mattermost_mcp_ssrf_detections += 1
+            return (f"[Lionguard] Mattermost MCP SSRF stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Mattermost MCP SSRF: {mattermost_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -3532,6 +3680,47 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_response_render_exfil(self, text: str) -> Optional[str]:
+        """SAIF-aligned: Detect EchoLeak-style data exfiltration via
+        Markdown image URLs, reference-style images, auto-fetch patterns,
+        invisible pixels, and CSP-allowed domain redirect proxying."""
+        for pattern, description in RESPONSE_RENDER_EXFIL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_sandbox_race(self, text: str) -> Optional[str]:
+        """Detect sandbox race window creating writable directories
+        when host path is absent at creation time."""
+        for pattern, description in SANDBOX_RACE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_sql_chain_inject(self, text: str) -> Optional[str]:
+        """Detect LangChain SQL chain prompt injection via unsanitized
+        DB row samples and multi-statement SQL emission."""
+        for pattern, description in SQL_CHAIN_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_decompression_bomb(self, text: str) -> Optional[str]:
+        """Detect zip bomb / decompression bomb DoS via unbounded
+        decompression of untrusted compressed documents."""
+        for pattern, description in DECOMPRESSION_BOMB_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mattermost_mcp_ssrf(self, text: str) -> Optional[str]:
+        """CVE-2026-4339: Detect Mattermost Agents MCP server SSRF
+        via missing internal URL validation on file attachments."""
+        for pattern, description in MATTERMOST_MCP_SSRF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -3857,4 +4046,9 @@ class ToolParser:
             "docker_socket_detections": self._docker_socket_detections,
             "tool_approval_bypass_detections": self._tool_approval_bypass_detections,
             "env_auth_bypass_detections": self._env_auth_bypass_detections,
+            "response_render_exfil_detections": self._response_render_exfil_detections,
+            "sandbox_race_detections": self._sandbox_race_detections,
+            "sql_chain_inject_detections": self._sql_chain_inject_detections,
+            "decompression_bomb_detections": self._decompression_bomb_detections,
+            "mattermost_mcp_ssrf_detections": self._mattermost_mcp_ssrf_detections,
         }
