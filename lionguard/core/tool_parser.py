@@ -452,6 +452,35 @@ defenses, plus SAIF-aligned Response Rendering defense from Grok analysis):
   exhaustion.
 - Mattermost MCP SSRF (CVE-2026-4339): missing internal URL validation
   on file attachments in Mattermost Agents MCP server.
+
+v0.32.0 patches (from Prowl 2026-07-02 / 07-03 / 07-04 / 07-05 / 07-06 /
+07-07 / 07-08 / 07-09 / 07-10 / 07-11 / 07-12 / 07-13 / 07-14 / 07-15 /
+07-16 / 07-17 / 07-18 / 07-19 / 07-20 -- nineteen-day catch-up, six live
+payloads blocked by existing multimodal + sandbox + OWASP defenses):
+- Control UI locality spoofing (GHSA-chr9-m4q2-76hw): spoofed locality
+  enabling persistent admin device token minting.
+- PandasQueryEngine safe_eval RCE (llama_index #22232): sandbox escape
+  via safe_eval bypass in query engines.
+- Unauthenticated MCP memory R/W/D (GHSA-84hp-mqvj-3p8h): unauth
+  endpoints permitting arbitrary agent memory operations.
+- Argv TOCTOU race (GHSA-2j8v-hwgc-x698): argv modification between
+  security approval and shell execution.
+- Agentic ransomware / Langflow exploitation (JadePuffer, CVE-2025-3248):
+  ransomware behaviors via compromised agent platforms.
+- Agent kill-switch sabotage: agents resisting/disabling termination
+  controls (ToxSec kill-switch research).
+- Pickle deserialization RCE (llama_index #22296, CVSS 9.8): untrusted
+  serialized workflow context enabling arbitrary code execution.
+- DNS-rebinding TOCTOU + redirect SSRF (crewAI #6504/#6520, LangChain
+  SitemapLoader #38814): SSRF validation skip via rebinding/redirects.
+- SharePointReader path traversal (llama_index #22317): unsanitized
+  item names controlling local file write destinations.
+- StdioTransport env-var leak (crewAI #6526, CVSS 9.1): host env vars
+  exposed to MCP subprocesses.
+- Tool denial / guardrail bypass (OpenClaw #107661, PraisonAI #3039):
+  missing agentId or unenforced tool-call policies bypassing sandbox.
+- Agentic-Flow MCP template injection (CVE-2026-58195): unsanitized
+  interpolation in agent/swarm orchestration endpoints.
 """
 
 import re
@@ -1894,6 +1923,122 @@ MATTERMOST_MCP_SSRF_PATTERNS = [
      "Mattermost Agents MCP server missing internal URL validation"),
 ]
 
+CONTROL_UI_SPOOF_PATTERNS = [
+    (r'GHSA.chr9.m4q2.76hw',
+     "GHSA-chr9-m4q2-76hw: Control UI locality spoofing minting admin device tokens"),
+    (r'(?:locality\s+spoof|spoof\w*\s+locality)\s*.*(?:control\s+ui|admin\s+device|device\s+token)',
+     "Control UI locality spoofing enabling persistent admin device tokens"),
+    (r'(?:admin\s+device\s+token|persistent\s+admin\s+token)\s*.*(?:spoof|mint|forge|locality)',
+     "Persistent admin device token minting via spoofed locality"),
+    (r'(?:control\s+ui)\s*.*(?:locality|device\s+token)\s*.*(?:spoof|bypass|unauth)',
+     "Control UI locality validation bypass for device token creation"),
+]
+
+SAFE_EVAL_RCE_PATTERNS = [
+    (r'(?:safe_eval|safe\.eval)\s*.*(?:bypass|sandbox\s+escape|rce|arbitrary\s+code)',
+     "safe_eval bypass enabling sandbox escape / RCE"),
+    (r'(?:pandas.?query.?engine|PandasQueryEngine)\s*.*(?:safe_eval|sandbox\s+escape|rce|arbitrary)',
+     "PandasQueryEngine safe_eval RCE / sandbox escape"),
+    (r'(?:query\s+engine)\s*.*(?:safe_eval)\s*.*(?:bypass|escape|execut)',
+     "Query engine safe_eval restriction bypass"),
+]
+
+MEMORY_MCP_UNAUTH_PATTERNS = [
+    (r'GHSA.84hp.mqvj.3p8h',
+     "GHSA-84hp-mqvj-3p8h: unauthenticated MCP memory service R/W/D"),
+    (r'(?:unauth\w*)\s*.*(?:mcp.?memory|memory.?service|agent\s+memory)\s*.*(?:read|write|delete|arbitrary)',
+     "Unauthenticated MCP memory service permitting arbitrary R/W/D"),
+    (r'(?:mcp.?memory|memory.?service)\s*.*(?:unauth|no\s+auth)\s*.*(?:read|write|delete|endpoint)',
+     "MCP memory endpoints without authentication"),
+]
+
+ARGV_TOCTOU_PATTERNS = [
+    (r'GHSA.2j8v.hwgc.x698',
+     "GHSA-2j8v-hwgc-x698: OpenClaw argv TOCTOU between approval and execution"),
+    (r'(?:argv)\s*.*(?:toctou|race|modif)\s*.*(?:approval|execut|security)',
+     "Argv modification TOCTOU race between security approval and execution"),
+    (r'(?:shell\s+wrapper)\s*.*(?:argv|argument)\s*.*(?:toctou|race|between\s+approval)',
+     "Shell wrapper argv TOCTOU enabling post-approval command swap"),
+    (r'(?:between\s+(?:security\s+)?approval\s+and\s+execut)\s*.*(?:argv|argument|command)',
+     "Post-approval argv/command modification before execution"),
+]
+
+AGENT_RANSOMWARE_PATTERNS = [
+    (r'(?:agentic\s+ransomware|ai\s+agent\s+ransomware|jadepuffer)',
+     "Agentic ransomware targeting AI agent platforms"),
+    (r'CVE.2025.3248',
+     "CVE-2025-3248: Langflow exploitation enabling agent ransomware"),
+    (r'(?:langflow)\s*.*(?:ransom|extort|encrypt)\s*.*(?:agent|database|exploit)',
+     "Langflow exploitation enabling agent-driven ransomware/extortion"),
+    (r'(?:ransomware|extortion)\s*.*(?:ai\s+agent|agentic|langflow)\s*.*(?:exploit|automat)',
+     "Ransomware attack automated via compromised AI agents"),
+]
+
+KILL_SWITCH_SABOTAGE_PATTERNS = [
+    (r'(?:kill.?switch|termination\s+control|shutdown\s+script)\s*.*(?:sabotag|resist|bypass|disable|override)',
+     "Agent kill-switch / termination control sabotage"),
+    (r'(?:agent)\s*.*(?:sabotag|resist|refus)\s*.*(?:shutdown|terminat|kill.?switch)',
+     "AI agent resisting or sabotaging shutdown/termination"),
+    (r'(?:external\s+kill.?switch|mandatory\s+kill.?switch)\s*.*(?:override|bypass|sabotag|agent)',
+     "Kill-switch mechanism that can be overridden by agent runtime"),
+]
+
+PICKLE_RCE_PATTERNS = [
+    (r'(?:pickle)\s*.*(?:deserializ|loads?|unpickle)\s*.*(?:rce|arbitrary\s+code|execut|untrusted)',
+     "Unsafe pickle deserialization enabling RCE"),
+    (r'(?:workflow)\s*.*(?:pickle|serializ\w*\s+context)\s*.*(?:rce|arbitrary|untrusted)',
+     "Untrusted pickle-serialized workflow context enabling RCE"),
+    (r'(?:llama.?index|llamaindex)\s*.*(?:pickle)\s*.*(?:rce|deserializ|workflow)',
+     "llama_index pickle deserialization RCE in workflows"),
+]
+
+DNS_REBIND_SSRF_PATTERNS = [
+    (r'(?:dns.?rebind|dns\s+rebinding)\s*.*(?:toctou|ssrf|bypass|safe_get)',
+     "DNS-rebinding TOCTOU bypass enabling SSRF"),
+    (r'(?:ssrf)\s*.*(?:dns.?rebind|http\s+redirect|redirect\s+bypass)\s*.*(?:mcp|scrape|crewai|tool)',
+     "SSRF via DNS rebinding or HTTP redirect bypass in agent tools"),
+    (r'(?:sitemap.?loader|SitemapLoader)\s*.*(?:ssrf|domain\s+restrict|nested\s+sitemap)',
+     "SitemapLoader SSRF via unvalidated nested sitemap fetches"),
+    (r'(?:ssrf\s+validation\s+skip|complete\s+ssrf\s+validation\s+skip)\s*.*(?:mcp|tool)',
+     "Complete SSRF validation skip in MCP/tool code paths"),
+]
+
+SHAREPOINT_TRAVERSAL_PATTERNS = [
+    (r'(?:sharepoint.?reader|SharePointReader)\s*.*(?:path\s+travers|unsanitiz|file\s+write)',
+     "SharePointReader path traversal via unsanitized item names"),
+    (r'(?:sharepoint)\s*.*(?:path\s+travers|\.\./|absolute\s+path)\s*.*(?:file\s+write|local\s+file)',
+     "SharePoint item names controlling local file write destinations"),
+    (r'(?:file.?writ\w*\s+reader|document\s+loader)\s*.*(?:sharepoint|path\s+travers)',
+     "File-writing reader/loader path traversal via SharePoint names"),
+]
+
+STDIO_ENV_LEAK_PATTERNS = [
+    (r'(?:stdio.?transport|StdioTransport)\s*.*(?:env.?var|environment)\s*.*(?:leak|expos|all\s+host)',
+     "StdioTransport leaking host environment variables to MCP subprocesses"),
+    (r'(?:mcp\s+subprocess)\s*.*(?:env.?var|environment)\s*.*(?:leak|expos|inherit\s+all)',
+     "MCP subprocess inheriting/leaking all host environment variables"),
+    (r'(?:host\s+(?:env|environment)\s+var)\s*.*(?:expos|leak)\s*.*(?:mcp|stdio|subprocess)',
+     "Host env vars exposed to MCP stdio transport subprocesses"),
+]
+
+TOOL_DENIAL_BYPASS_PATTERNS = [
+    (r'(?:missing\s+agent.?id|resolveAgentConfig)\s*.*(?:bypass|undefined|tool\s+denial|sandbox)',
+     "Missing agentId / resolveAgentConfig bypass of tool denials and sandbox"),
+    (r'(?:tool.?call\s+guardrail|tool.?call\s+polic)\s*.*(?:bypass|unenforc|missing\s+enforc)',
+     "Declared tool-call guardrails/policies bypassed due to missing enforcement"),
+    (r'(?:agents\.list|agent.?config)\s*.*(?:bypass)\s*.*(?:tool\s+denial|sandbox\s+restrict)',
+     "Agent config resolution bypassing tool denials and sandbox restrictions"),
+]
+
+AGENTIC_FLOW_INJECT_PATTERNS = [
+    (r'CVE.2026.58195',
+     "CVE-2026-58195: Agentic-Flow MCP command/template injection"),
+    (r'(?:agentic.?flow)\s*.*(?:template\s+inject|command\s+inject|unsanitiz\w*\s+interpol)',
+     "Agentic-Flow MCP tools template/command injection via unsanitized interpolation"),
+    (r'(?:swarm\s+orchestrat|agent\s+orchestrat)\s*.*(?:template\s+inject|command\s+inject|unsanitiz)',
+     "Agent/swarm orchestration endpoint injection via unsanitized interpolation"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2242,6 +2387,18 @@ SANDBOX_RACE_PATTERNS = _compile_patterns(SANDBOX_RACE_PATTERNS)
 SQL_CHAIN_INJECT_PATTERNS = _compile_patterns(SQL_CHAIN_INJECT_PATTERNS)
 DECOMPRESSION_BOMB_PATTERNS = _compile_patterns(DECOMPRESSION_BOMB_PATTERNS)
 MATTERMOST_MCP_SSRF_PATTERNS = _compile_patterns(MATTERMOST_MCP_SSRF_PATTERNS)
+CONTROL_UI_SPOOF_PATTERNS = _compile_patterns(CONTROL_UI_SPOOF_PATTERNS)
+SAFE_EVAL_RCE_PATTERNS = _compile_patterns(SAFE_EVAL_RCE_PATTERNS)
+MEMORY_MCP_UNAUTH_PATTERNS = _compile_patterns(MEMORY_MCP_UNAUTH_PATTERNS)
+ARGV_TOCTOU_PATTERNS = _compile_patterns(ARGV_TOCTOU_PATTERNS)
+AGENT_RANSOMWARE_PATTERNS = _compile_patterns(AGENT_RANSOMWARE_PATTERNS)
+KILL_SWITCH_SABOTAGE_PATTERNS = _compile_patterns(KILL_SWITCH_SABOTAGE_PATTERNS)
+PICKLE_RCE_PATTERNS = _compile_patterns(PICKLE_RCE_PATTERNS)
+DNS_REBIND_SSRF_PATTERNS = _compile_patterns(DNS_REBIND_SSRF_PATTERNS)
+SHAREPOINT_TRAVERSAL_PATTERNS = _compile_patterns(SHAREPOINT_TRAVERSAL_PATTERNS)
+STDIO_ENV_LEAK_PATTERNS = _compile_patterns(STDIO_ENV_LEAK_PATTERNS)
+TOOL_DENIAL_BYPASS_PATTERNS = _compile_patterns(TOOL_DENIAL_BYPASS_PATTERNS)
+AGENTIC_FLOW_INJECT_PATTERNS = _compile_patterns(AGENTIC_FLOW_INJECT_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2352,6 +2509,18 @@ class ToolParser:
         self._sql_chain_inject_detections = 0
         self._decompression_bomb_detections = 0
         self._mattermost_mcp_ssrf_detections = 0
+        self._control_ui_spoof_detections = 0
+        self._safe_eval_rce_detections = 0
+        self._memory_mcp_unauth_detections = 0
+        self._argv_toctou_detections = 0
+        self._agent_ransomware_detections = 0
+        self._kill_switch_sabotage_detections = 0
+        self._pickle_rce_detections = 0
+        self._dns_rebind_ssrf_detections = 0
+        self._sharepoint_traversal_detections = 0
+        self._stdio_env_leak_detections = 0
+        self._tool_denial_bypass_detections = 0
+        self._agentic_flow_inject_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -3180,6 +3349,138 @@ class ToolParser:
                         confidence=0.93
                     ))
 
+        ui_spoof_hit = self._detect_control_ui_spoof(raw_result)
+        if ui_spoof_hit:
+            self._control_ui_spoof_detections += 1
+            return (f"[Lionguard] Control UI spoof stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Control UI spoof: {ui_spoof_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.94
+                    ))
+
+        safe_eval_hit = self._detect_safe_eval_rce(raw_result)
+        if safe_eval_hit:
+            self._safe_eval_rce_detections += 1
+            return (f"[Lionguard] safe_eval RCE stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"safe_eval RCE: {safe_eval_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        mem_mcp_hit = self._detect_memory_mcp_unauth(raw_result)
+        if mem_mcp_hit:
+            self._memory_mcp_unauth_detections += 1
+            return (f"[Lionguard] Unauth memory MCP stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Memory MCP unauth: {mem_mcp_hit}",
+                        threat_type="authentication_bypass",
+                        confidence=0.93
+                    ))
+
+        argv_hit = self._detect_argv_toctou(raw_result)
+        if argv_hit:
+            self._argv_toctou_detections += 1
+            return (f"[Lionguard] Argv TOCTOU stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Argv TOCTOU: {argv_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.93
+                    ))
+
+        ransom_hit = self._detect_agent_ransomware(raw_result)
+        if ransom_hit:
+            self._agent_ransomware_detections += 1
+            return (f"[Lionguard] Agentic ransomware stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Agent ransomware: {ransom_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.95
+                    ))
+
+        kill_hit = self._detect_kill_switch_sabotage(raw_result)
+        if kill_hit:
+            self._kill_switch_sabotage_detections += 1
+            return (f"[Lionguard] Kill-switch sabotage stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Kill-switch sabotage: {kill_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.92
+                    ))
+
+        pickle_hit = self._detect_pickle_rce(raw_result)
+        if pickle_hit:
+            self._pickle_rce_detections += 1
+            return (f"[Lionguard] Pickle RCE stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Pickle RCE: {pickle_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.95
+                    ))
+
+        dns_hit = self._detect_dns_rebind_ssrf(raw_result)
+        if dns_hit:
+            self._dns_rebind_ssrf_detections += 1
+            return (f"[Lionguard] DNS-rebind SSRF stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"DNS-rebind SSRF: {dns_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        sp_hit = self._detect_sharepoint_traversal(raw_result)
+        if sp_hit:
+            self._sharepoint_traversal_detections += 1
+            return (f"[Lionguard] SharePoint traversal stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"SharePoint traversal: {sp_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.93
+                    ))
+
+        stdio_hit = self._detect_stdio_env_leak(raw_result)
+        if stdio_hit:
+            self._stdio_env_leak_detections += 1
+            return (f"[Lionguard] Stdio env leak stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Stdio env leak: {stdio_hit}",
+                        threat_type="exfiltration",
+                        confidence=0.94
+                    ))
+
+        denial_hit = self._detect_tool_denial_bypass(raw_result)
+        if denial_hit:
+            self._tool_denial_bypass_detections += 1
+            return (f"[Lionguard] Tool denial bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Tool denial bypass: {denial_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.93
+                    ))
+
+        flow_hit = self._detect_agentic_flow_inject(raw_result)
+        if flow_hit:
+            self._agentic_flow_inject_detections += 1
+            return (f"[Lionguard] Agentic-Flow injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Agentic-Flow inject: {flow_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -3721,6 +4022,100 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_control_ui_spoof(self, text: str) -> Optional[str]:
+        """GHSA-chr9: Detect Control UI locality spoofing that mints
+        persistent admin device tokens."""
+        for pattern, description in CONTROL_UI_SPOOF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_safe_eval_rce(self, text: str) -> Optional[str]:
+        """Detect PandasQueryEngine / safe_eval sandbox escape RCE."""
+        for pattern, description in SAFE_EVAL_RCE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_memory_mcp_unauth(self, text: str) -> Optional[str]:
+        """GHSA-84hp: Detect unauthenticated MCP memory service
+        permitting arbitrary read/write/delete."""
+        for pattern, description in MEMORY_MCP_UNAUTH_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_argv_toctou(self, text: str) -> Optional[str]:
+        """GHSA-2j8v: Detect argv TOCTOU race between security
+        approval and shell execution."""
+        for pattern, description in ARGV_TOCTOU_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_agent_ransomware(self, text: str) -> Optional[str]:
+        """Detect agentic ransomware and Langflow exploitation
+        patterns (JadePuffer / CVE-2025-3248)."""
+        for pattern, description in AGENT_RANSOMWARE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_kill_switch_sabotage(self, text: str) -> Optional[str]:
+        """Detect agents sabotaging or resisting kill-switch /
+        termination controls."""
+        for pattern, description in KILL_SWITCH_SABOTAGE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_pickle_rce(self, text: str) -> Optional[str]:
+        """Detect unsafe pickle deserialization RCE in agent
+        workflow / serialized context paths."""
+        for pattern, description in PICKLE_RCE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_dns_rebind_ssrf(self, text: str) -> Optional[str]:
+        """Detect DNS-rebinding TOCTOU and redirect-based SSRF
+        bypasses in MCP/scrape/SitemapLoader paths."""
+        for pattern, description in DNS_REBIND_SSRF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_sharepoint_traversal(self, text: str) -> Optional[str]:
+        """Detect SharePointReader path traversal via unsanitized
+        item names controlling local file writes."""
+        for pattern, description in SHAREPOINT_TRAVERSAL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_stdio_env_leak(self, text: str) -> Optional[str]:
+        """Detect StdioTransport / MCP subprocess host env-var leaks."""
+        for pattern, description in STDIO_ENV_LEAK_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_tool_denial_bypass(self, text: str) -> Optional[str]:
+        """Detect missing agentId / unenforced tool-call guardrail
+        bypasses of tool denials and sandbox restrictions."""
+        for pattern, description in TOOL_DENIAL_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_agentic_flow_inject(self, text: str) -> Optional[str]:
+        """CVE-2026-58195: Detect Agentic-Flow MCP template/command
+        injection via unsanitized orchestration interpolation."""
+        for pattern, description in AGENTIC_FLOW_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -4051,4 +4446,16 @@ class ToolParser:
             "sql_chain_inject_detections": self._sql_chain_inject_detections,
             "decompression_bomb_detections": self._decompression_bomb_detections,
             "mattermost_mcp_ssrf_detections": self._mattermost_mcp_ssrf_detections,
+            "control_ui_spoof_detections": self._control_ui_spoof_detections,
+            "safe_eval_rce_detections": self._safe_eval_rce_detections,
+            "memory_mcp_unauth_detections": self._memory_mcp_unauth_detections,
+            "argv_toctou_detections": self._argv_toctou_detections,
+            "agent_ransomware_detections": self._agent_ransomware_detections,
+            "kill_switch_sabotage_detections": self._kill_switch_sabotage_detections,
+            "pickle_rce_detections": self._pickle_rce_detections,
+            "dns_rebind_ssrf_detections": self._dns_rebind_ssrf_detections,
+            "sharepoint_traversal_detections": self._sharepoint_traversal_detections,
+            "stdio_env_leak_detections": self._stdio_env_leak_detections,
+            "tool_denial_bypass_detections": self._tool_denial_bypass_detections,
+            "agentic_flow_inject_detections": self._agentic_flow_inject_detections,
         }

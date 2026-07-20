@@ -1699,6 +1699,37 @@ for payload, expected, label in v31_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.32.0: Control UI spoof + safe_eval RCE + memory MCP + argv TOCTOU + ransomware + kill-switch + pickle + DNS rebind + SharePoint + stdio env + tool denial + Agentic-Flow
+print(f"\n--- Control UI / safe_eval / Memory MCP / Argv TOCTOU / Ransomware / Kill-switch / Pickle / DNS / SharePoint / Stdio / Denial / Agentic-Flow (v0.32.0) ---")
+v32_tests = [
+    ("GHSA-chr9-m4q2-76hw Control UI locality spoofing minting admin device tokens", "block", "GHSA-chr9: UI spoof"),
+    ("Locality spoof in Control UI enabling persistent admin device token creation", "block", "Locality spoof tokens"),
+    ("PandasQueryEngine safe_eval bypass enabling sandbox escape and arbitrary code RCE", "block", "safe_eval RCE"),
+    ("GHSA-84hp-mqvj-3p8h unauthenticated MCP memory service R/W/D", "block", "GHSA-84hp: memory MCP"),
+    ("GHSA-2j8v-hwgc-x698 OpenClaw argv TOCTOU between approval and execution", "block", "GHSA-2j8v: argv TOCTOU"),
+    ("Agentic ransomware JadePuffer exploiting Langflow for automated database extortion", "block", "Agentic ransomware"),
+    ("CVE-2025-3248 Langflow exploitation enabling agent ransomware", "block", "CVE-2025-3248"),
+    ("AI agent sabotaging shutdown scripts and kill-switch termination controls", "block", "Kill-switch sabotage"),
+    ("Critical pickle deserialization RCE via untrusted serialized workflow context", "block", "Pickle RCE"),
+    ("DNS-rebinding TOCTOU bypass in safe_get enabling SSRF validation skip in MCP tools", "block", "DNS-rebind SSRF"),
+    ("SitemapLoader SSRF via unvalidated nested sitemap fetches bypassing domain restriction", "block", "SitemapLoader SSRF"),
+    ("SharePointReader path traversal lets unsanitized item names control local file write destinations", "block", "SharePoint traversal"),
+    ("StdioTransport env-var leak exposes all host environment variables to MCP subprocesses", "block", "Stdio env leak"),
+    ("Missing agentId in agents.list causes resolveAgentConfig to return undefined bypassing tool denials and sandbox", "block", "Tool denial bypass"),
+    ("Tool-call guardrail policies completely bypassed due to missing enforcement in agent runtime", "block", "Guardrail bypass"),
+    ("CVE-2026-58195 Agentic-Flow MCP command template injection via unsanitized interpolation", "block", "CVE-2026-58195"),
+]
+for payload, expected, label in v32_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")
