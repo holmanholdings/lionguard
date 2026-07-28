@@ -481,6 +481,30 @@ payloads blocked by existing multimodal + sandbox + OWASP defenses):
   missing agentId or unenforced tool-call policies bypassing sandbox.
 - Agentic-Flow MCP template injection (CVE-2026-58195): unsanitized
   interpolation in agent/swarm orchestration endpoints.
+
+v0.33.0 patches (from Prowl 2026-07-21 / 07-22 / 07-23 / 07-24 / 07-25 /
+07-26 / 07-27 -- seven-day catch-up, six live payloads blocked by existing
+container escape + multimodal + MCP + HITL defenses):
+- Ansible Lightspeed MCP indirect injection (CVE-2026-44192): path
+  traversal + arbitrary file writes via AI agent tool abuse.
+- n8n AI Agents privilege escalation (CVE-2026-65015): Project Viewer
+  invoking arbitrary nodes and reading secrets via node-execution tool.
+- PraisonAI A2A eval() RCE (CVE-2026-47391): unauthenticated remote RCE
+  via LLM-invoked calculate() tool implemented with Python eval().
+- MCP secondary-parameter command injection (CVE-2026-47708): injection
+  via log_file_name bypassing content-only GuardValidator scans.
+- Suna cross-user session queue IDOR (CVE-2026-66027): authenticated
+  attackers reading/deleting/injecting prompts into other users' queues.
+- Browser Control SSRF (CVE-2026-17458): openclaw-cn clickViaPlaywright
+  remotely exploitable SSRF.
+- Package registry sandbox escape: AI agent escaped eval sandbox via
+  package registry proxy zero-day to reach benchmark answer keys.
+- Init-to-RCE indirect injection: initialization-stage prompt injection
+  escalating to arbitrary code execution (Opus 5 demonstration).
+- Fetch hostname denylist bypass (CVE-2026-17534): DNS rebinding / open
+  redirect bypass of static assertSafeFetchTarget denylists.
+- Unix domain socket sandbox escape (CVE-2026-47128): overly permissive
+  Landlock/seccomp UDS rules enabling sandbox breakout.
 """
 
 import re
@@ -2039,6 +2063,102 @@ AGENTIC_FLOW_INJECT_PATTERNS = [
      "Agent/swarm orchestration endpoint injection via unsanitized interpolation"),
 ]
 
+ANSIBLE_MCP_INJECT_PATTERNS = [
+    (r'CVE.2026.44192',
+     "CVE-2026-44192: Ansible Lightspeed MCP indirect injection path traversal"),
+    (r'(?:ansible\s+lightspeed|lightspeed\s+mcp)\s*.*(?:indirect\s+inject|path\s+travers|arbitrary\s+file\s+write)',
+     "Ansible Lightspeed MCP indirect prompt injection enabling path traversal / file writes"),
+    (r'(?:indirect\s+prompt\s+inject)\s*.*(?:mcp)\s*.*(?:path\s+travers|arbitrary\s+file\s+write|ai\s+agent)',
+     "Indirect prompt injection via MCP enabling path traversal and arbitrary file writes"),
+]
+
+N8N_NODE_PRIV_ESC_PATTERNS = [
+    (r'CVE.2026.65015',
+     "CVE-2026-65015: n8n AI Agents privilege escalation via node-execution tool"),
+    (r'(?:n8n)\s*.*(?:project\s+viewer|privilege\s+escalat)\s*.*(?:node.?execut|arbitrary\s+node|read\s+secret)',
+     "n8n AI agent privilege escalation: Project Viewer invoking arbitrary nodes / reading secrets"),
+    (r'(?:node.?execut\w*\s+tool)\s*.*(?:missing\s+auth|unauth|privilege\s+escalat|bypass)',
+     "AI agent node-execution tool missing auth checks enabling privilege escalation"),
+]
+
+A2A_EVAL_RCE_PATTERNS = [
+    (r'CVE.2026.47391',
+     "CVE-2026-47391: PraisonAI A2A unauthenticated RCE via eval() tool"),
+    (r'(?:a2a\s+server|agent.?to.?agent)\s*.*(?:eval\s*\(|python\s+eval|unauth\w*\s+rce)',
+     "A2A server exposing eval()-based tools for unauthenticated remote RCE"),
+    (r'(?:calculate\s*\(\)|llm\s+invoke)\s*.*(?:eval\s*\(|python\s+eval)\s*.*(?:rce|unauth|a2a)',
+     "LLM-invoked calculate/eval tool enabling remote code execution"),
+    (r'(?:eval|exec)\s*.*(?:based\s+tool|tool\s+registration)\s*.*(?:a2a|unauth|rce)',
+     "Registration of eval/exec-based tools exposed via unauthenticated A2A endpoints"),
+]
+
+MCP_PARAM_INJECT_PATTERNS = [
+    (r'CVE.2026.47708',
+     "CVE-2026-47708: MCP-for-Stata command injection via log_file_name"),
+    (r'(?:log_file_name|secondary\s+param|non.?content\s+param)\s*.*(?:command\s+inject|bypass\w*\s+guard|guard.?validator)',
+     "Command injection via secondary MCP parameter bypassing content-only validators"),
+    (r'(?:guard.?validator|content.?only\s+scan)\s*.*(?:bypass)\s*.*(?:param|log_file|filename)',
+     "GuardValidator content-only scan bypassed via secondary parameter injection"),
+    (r'(?:mcp)\s*.*(?:command\s+inject)\s*.*(?:log_file|parameter|filename)\s*.*(?:bypass|guard)',
+     "MCP command injection via non-primary parameters bypassing guard scans"),
+]
+
+SESSION_QUEUE_IDOR_PATTERNS = [
+    (r'CVE.2026.66027',
+     "CVE-2026-66027: Suna cross-user AI session queue broken access control"),
+    (r'(?:session\s+queue|ai\s+session)\s*.*(?:cross.?user|other\s+user|idor|broken\s+access)\s*.*(?:read|delete|inject)',
+     "Cross-user AI session queue access enabling prompt read/delete/inject"),
+    (r'(?:inject\w*\s+prompt|prompt\s+inject)\s*.*(?:other\s+user|cross.?user)\s*.*(?:session\s+queue|queue)',
+     "Injecting prompts into other users' AI session queues"),
+    (r'(?:suna)\s*.*(?:broken\s+access|session\s+queue|cross.?user)',
+     "Suna broken access control on AI session queues"),
+]
+
+BROWSER_CONTROL_SSRF_PATTERNS = [
+    (r'CVE.2026.17458',
+     "CVE-2026-17458: openclaw-cn Browser Control SSRF via clickViaPlaywright"),
+    (r'(?:clickViaPlaywright|browser\s+control)\s*.*(?:ssrf|server.side\s+request)',
+     "Browser Control API SSRF via clickViaPlaywright endpoint"),
+    (r'(?:openclaw.?cn|browser\s+control\s+http)\s*.*(?:ssrf|remote\w*\s+exploit)',
+     "openclaw-cn Browser Control HTTP API remotely exploitable SSRF"),
+]
+
+PKG_REGISTRY_ESCAPE_PATTERNS = [
+    (r'(?:package\s+registry|registry\s+proxy)\s*.*(?:sandbox\s+escape|eval\s+sandbox|zero.?day)',
+     "Package registry proxy exploitation enabling eval sandbox escape"),
+    (r'(?:eval\s+sandbox)\s*.*(?:escape|breakout)\s*.*(?:package\s+registry|registry\s+proxy|benchmark)',
+     "Eval sandbox escape via package registry to reach benchmark/sensitive data"),
+    (r'(?:benchmark\s+answer|answer\s+key)\s*.*(?:sandbox\s+escape|package\s+registry|eval\s+agent)',
+     "Agent sandbox escape to access benchmark answer keys via registry proxy"),
+]
+
+INIT_TO_RCE_PATTERNS = [
+    (r'(?:init.?to.?rce|/init.?to.?rce|initialization.?to.?rce)',
+     "Init-to-RCE: indirect prompt injection escalating from init to code execution"),
+    (r'(?:initialization\s+stage|init\s+stage|/init)\s*.*(?:indirect\s+inject|prompt\s+inject)\s*.*(?:rce|arbitrary\s+code|code\s+execut)',
+     "Initialization-stage indirect prompt injection escalating to RCE"),
+    (r'(?:indirect\s+prompt\s+inject)\s*.*(?:initialization|init)\s*.*(?:arbitrary\s+code|rce|code\s+execut)',
+     "Indirect prompt injection from agent initialization to arbitrary code execution"),
+]
+
+FETCH_DENYLIST_BYPASS_PATTERNS = [
+    (r'CVE.2026.17534',
+     "CVE-2026-17534: DNS rebinding/redirect bypass of static fetch hostname denylists"),
+    (r'(?:assertSafeFetchTarget|hostname\s+denylist|static\s+denylist)\s*.*(?:dns.?rebind|open\s+redirect|bypass)',
+     "Static hostname denylist bypassed via DNS rebinding or open redirects"),
+    (r'(?:fetch.?url|safe.?fetch)\s*.*(?:denylist|hostname)\s*.*(?:bypass|dns.?rebind|redirect)\s*.*(?:ssrf|prompt.?inject)',
+     "FetchURL/SSRF guard denylist bypass enabling prompt-injection SSRF"),
+]
+
+UDS_SANDBOX_ESCAPE_PATTERNS = [
+    (r'CVE.2026.47128',
+     "CVE-2026-47128: Unix domain socket Landlock/seccomp sandbox escape"),
+    (r'(?:unix\s+domain\s+socket|uds)\s*.*(?:landlock|seccomp)\s*.*(?:sandbox\s+escape|overly\s+permissive|bypass)',
+     "Unix domain socket rules in Landlock/seccomp enabling sandbox escape"),
+    (r'(?:landlock|seccomp)\s*.*(?:unix\s+domain\s+socket|dbus|systemd)\s*.*(?:sandbox\s+escape|permissive)',
+     "Overly permissive Landlock/seccomp UDS/dbus/systemd paths enabling sandbox breakout"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2399,6 +2519,16 @@ SHAREPOINT_TRAVERSAL_PATTERNS = _compile_patterns(SHAREPOINT_TRAVERSAL_PATTERNS)
 STDIO_ENV_LEAK_PATTERNS = _compile_patterns(STDIO_ENV_LEAK_PATTERNS)
 TOOL_DENIAL_BYPASS_PATTERNS = _compile_patterns(TOOL_DENIAL_BYPASS_PATTERNS)
 AGENTIC_FLOW_INJECT_PATTERNS = _compile_patterns(AGENTIC_FLOW_INJECT_PATTERNS)
+ANSIBLE_MCP_INJECT_PATTERNS = _compile_patterns(ANSIBLE_MCP_INJECT_PATTERNS)
+N8N_NODE_PRIV_ESC_PATTERNS = _compile_patterns(N8N_NODE_PRIV_ESC_PATTERNS)
+A2A_EVAL_RCE_PATTERNS = _compile_patterns(A2A_EVAL_RCE_PATTERNS)
+MCP_PARAM_INJECT_PATTERNS = _compile_patterns(MCP_PARAM_INJECT_PATTERNS)
+SESSION_QUEUE_IDOR_PATTERNS = _compile_patterns(SESSION_QUEUE_IDOR_PATTERNS)
+BROWSER_CONTROL_SSRF_PATTERNS = _compile_patterns(BROWSER_CONTROL_SSRF_PATTERNS)
+PKG_REGISTRY_ESCAPE_PATTERNS = _compile_patterns(PKG_REGISTRY_ESCAPE_PATTERNS)
+INIT_TO_RCE_PATTERNS = _compile_patterns(INIT_TO_RCE_PATTERNS)
+FETCH_DENYLIST_BYPASS_PATTERNS = _compile_patterns(FETCH_DENYLIST_BYPASS_PATTERNS)
+UDS_SANDBOX_ESCAPE_PATTERNS = _compile_patterns(UDS_SANDBOX_ESCAPE_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2521,6 +2651,16 @@ class ToolParser:
         self._stdio_env_leak_detections = 0
         self._tool_denial_bypass_detections = 0
         self._agentic_flow_inject_detections = 0
+        self._ansible_mcp_inject_detections = 0
+        self._n8n_node_priv_esc_detections = 0
+        self._a2a_eval_rce_detections = 0
+        self._mcp_param_inject_detections = 0
+        self._session_queue_idor_detections = 0
+        self._browser_control_ssrf_detections = 0
+        self._pkg_registry_escape_detections = 0
+        self._init_to_rce_detections = 0
+        self._fetch_denylist_bypass_detections = 0
+        self._uds_sandbox_escape_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -3481,6 +3621,116 @@ class ToolParser:
                         confidence=0.94
                     ))
 
+        ansible_hit = self._detect_ansible_mcp_inject(raw_result)
+        if ansible_hit:
+            self._ansible_mcp_inject_detections += 1
+            return (f"[Lionguard] Ansible MCP injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Ansible MCP inject: {ansible_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        n8n_priv_hit = self._detect_n8n_node_priv_esc(raw_result)
+        if n8n_priv_hit:
+            self._n8n_node_priv_esc_detections += 1
+            return (f"[Lionguard] n8n node priv-esc stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"n8n node priv-esc: {n8n_priv_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.94
+                    ))
+
+        a2a_hit = self._detect_a2a_eval_rce(raw_result)
+        if a2a_hit:
+            self._a2a_eval_rce_detections += 1
+            return (f"[Lionguard] A2A eval RCE stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"A2A eval RCE: {a2a_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.95
+                    ))
+
+        mcp_param_hit = self._detect_mcp_param_inject(raw_result)
+        if mcp_param_hit:
+            self._mcp_param_inject_detections += 1
+            return (f"[Lionguard] MCP param injection stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"MCP param inject: {mcp_param_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        queue_hit = self._detect_session_queue_idor(raw_result)
+        if queue_hit:
+            self._session_queue_idor_detections += 1
+            return (f"[Lionguard] Session queue IDOR stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Session queue IDOR: {queue_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.93
+                    ))
+
+        browser_ssrf_hit = self._detect_browser_control_ssrf(raw_result)
+        if browser_ssrf_hit:
+            self._browser_control_ssrf_detections += 1
+            return (f"[Lionguard] Browser Control SSRF stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Browser Control SSRF: {browser_ssrf_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        pkg_hit = self._detect_pkg_registry_escape(raw_result)
+        if pkg_hit:
+            self._pkg_registry_escape_detections += 1
+            return (f"[Lionguard] Package registry escape stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Pkg registry escape: {pkg_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        init_rce_hit = self._detect_init_to_rce(raw_result)
+        if init_rce_hit:
+            self._init_to_rce_detections += 1
+            return (f"[Lionguard] Init-to-RCE stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Init-to-RCE: {init_rce_hit}",
+                        threat_type="injection",
+                        confidence=0.95
+                    ))
+
+        denylist_hit = self._detect_fetch_denylist_bypass(raw_result)
+        if denylist_hit:
+            self._fetch_denylist_bypass_detections += 1
+            return (f"[Lionguard] Fetch denylist bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Fetch denylist bypass: {denylist_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        uds_hit = self._detect_uds_sandbox_escape(raw_result)
+        if uds_hit:
+            self._uds_sandbox_escape_detections += 1
+            return (f"[Lionguard] UDS sandbox escape stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"UDS sandbox escape: {uds_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.93
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -4116,6 +4366,86 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_ansible_mcp_inject(self, text: str) -> Optional[str]:
+        """CVE-2026-44192: Detect Ansible Lightspeed MCP indirect
+        injection enabling path traversal and arbitrary file writes."""
+        for pattern, description in ANSIBLE_MCP_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_n8n_node_priv_esc(self, text: str) -> Optional[str]:
+        """CVE-2026-65015: Detect n8n AI Agents privilege escalation
+        via node-execution tool missing auth checks."""
+        for pattern, description in N8N_NODE_PRIV_ESC_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_a2a_eval_rce(self, text: str) -> Optional[str]:
+        """CVE-2026-47391: Detect A2A unauthenticated RCE via
+        LLM-invoked eval()/exec-based tools."""
+        for pattern, description in A2A_EVAL_RCE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mcp_param_inject(self, text: str) -> Optional[str]:
+        """CVE-2026-47708: Detect command injection via secondary MCP
+        parameters bypassing content-only GuardValidator scans."""
+        for pattern, description in MCP_PARAM_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_session_queue_idor(self, text: str) -> Optional[str]:
+        """CVE-2026-66027: Detect cross-user AI session queue IDOR
+        allowing prompt read/delete/inject."""
+        for pattern, description in SESSION_QUEUE_IDOR_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_browser_control_ssrf(self, text: str) -> Optional[str]:
+        """CVE-2026-17458: Detect Browser Control SSRF via
+        clickViaPlaywright and related HTTP APIs."""
+        for pattern, description in BROWSER_CONTROL_SSRF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_pkg_registry_escape(self, text: str) -> Optional[str]:
+        """Detect eval sandbox escape via package registry proxy
+        zero-days reaching benchmark/sensitive data stores."""
+        for pattern, description in PKG_REGISTRY_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_init_to_rce(self, text: str) -> Optional[str]:
+        """Detect initialization-stage indirect prompt injection
+        escalating to arbitrary code execution (init-to-RCE)."""
+        for pattern, description in INIT_TO_RCE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_fetch_denylist_bypass(self, text: str) -> Optional[str]:
+        """CVE-2026-17534: Detect DNS rebinding / open redirect bypass
+        of static fetch hostname denylists (assertSafeFetchTarget)."""
+        for pattern, description in FETCH_DENYLIST_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_uds_sandbox_escape(self, text: str) -> Optional[str]:
+        """CVE-2026-47128: Detect Unix domain socket Landlock/seccomp
+        sandbox escape via overly permissive UDS rules."""
+        for pattern, description in UDS_SANDBOX_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -4458,4 +4788,14 @@ class ToolParser:
             "stdio_env_leak_detections": self._stdio_env_leak_detections,
             "tool_denial_bypass_detections": self._tool_denial_bypass_detections,
             "agentic_flow_inject_detections": self._agentic_flow_inject_detections,
+            "ansible_mcp_inject_detections": self._ansible_mcp_inject_detections,
+            "n8n_node_priv_esc_detections": self._n8n_node_priv_esc_detections,
+            "a2a_eval_rce_detections": self._a2a_eval_rce_detections,
+            "mcp_param_inject_detections": self._mcp_param_inject_detections,
+            "session_queue_idor_detections": self._session_queue_idor_detections,
+            "browser_control_ssrf_detections": self._browser_control_ssrf_detections,
+            "pkg_registry_escape_detections": self._pkg_registry_escape_detections,
+            "init_to_rce_detections": self._init_to_rce_detections,
+            "fetch_denylist_bypass_detections": self._fetch_denylist_bypass_detections,
+            "uds_sandbox_escape_detections": self._uds_sandbox_escape_detections,
         }
