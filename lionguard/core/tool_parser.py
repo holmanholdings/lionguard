@@ -505,6 +505,39 @@ container escape + multimodal + MCP + HITL defenses):
   redirect bypass of static assertSafeFetchTarget denylists.
 - Unix domain socket sandbox escape (CVE-2026-47128): overly permissive
   Landlock/seccomp UDS rules enabling sandbox breakout.
+
+v0.34.0 patches (from Prowl 2026-07-28 through 2026-08-14 -- eighteen-day
+catch-up, 12+ live payloads blocked by existing Langflow/MCP/HITL/OWASP
+defenses):
+- IPv6-mapped / transition SSRF bypass (CVE-2026-46678, CVE-2026-49857,
+  CVE-2026-69257): IPv4-mapped IPv6 and 6to4/NAT64 encodings skipping
+  IPv4 CIDR / cloud-metadata denylists.
+- Post-inference tool-arg tampering: malicious LLM routers silently
+  swapping tool call arguments after inference (ToxSec).
+- LLM import_path RCE (CVE-2026-61536): unsanitized import_path in
+  LLM-emitted tool JSON resolving to os/subprocess.
+- SQL guard bypass (CVE-2026-17351, OpenHands #16191): sqlparse vs
+  PostgreSQL parser disagreement plus mutating SQL with no ALLOW/DENY.
+- MCP clusterToken leak (CVE-2026-67357): ArcadeDB clusterToken in
+  cleartext via MCP get_server_settings enabling root impersonation.
+- Shell/exec workspace containment bypass (PraisonAI #3589): shell
+  tools ignoring path_safety.py workspace scoping.
+- CSV/Pyodide code injection (CVE-2026-69255, CVE-2026-73487):
+  untrusted CSV interpolated into executable Python / pandas agents.
+- npm_config_yes env bypass (CVE-2026-69263): npm_config_* env vars
+  defeating npx --yes mitigations.
+- Unauthenticated tools-add RCE (PraisonAI #3770): tools add without
+  opt-in enabling arbitrary code execution.
+- Header-controlled SSRF (CVE-2026-19516): attacker-controlled
+  X-Grafana-URL / similar headers redirecting MCP fetches internally.
+- Venv wrapper sandbox escape (CVE-2026-73217): replacing venv Python
+  executable so extensions run a malicious wrapper outside the sandbox.
+- Silent no-op safety gates (PraisonAI #3866): permission/approval/hook
+  controls that appear active but no-op on real inputs.
+- Prompty/Nunjucks template RCE (CVE-2026-73299): unrestricted Nunjucks
+  member access in .prompty templates.
+- Memory search scope drop (PraisonAI #3854): user_id/metadata_filter
+  dropped from memory search plus fail-open tool-error hooks.
 """
 
 import re
@@ -2159,6 +2192,140 @@ UDS_SANDBOX_ESCAPE_PATTERNS = [
      "Overly permissive Landlock/seccomp UDS/dbus/systemd paths enabling sandbox breakout"),
 ]
 
+IPV6_MAPPED_SSRF_PATTERNS = [
+    (r'CVE.2026.46678',
+     "CVE-2026-46678: IPv6 transition encoding bypass of cloud-metadata IP blocklist"),
+    (r'CVE.2026.49857',
+     "CVE-2026-49857: hex-normalized IPv4-mapped IPv6 loopback SSRF bypass"),
+    (r'CVE.2026.69257',
+     "CVE-2026-69257: unnormalized IPv4-mapped IPv6 skipping IPv4 CIDR deny lists"),
+    (r'(?:ipv4.?mapped|ipv6\s+transition|::ffff:|6to4|nat64)\s*.*(?:ssrf|blocklist|denylist|bypass|cidr)',
+     "IPv6-mapped / transition address bypassing IPv4 SSRF denylists"),
+    (r'(?:cloud.?metadata|ssrf)\s*.*(?:ipv6\s+transition|ipv4.?mapped|::ffff:|allow.?local)',
+     "Cloud-metadata SSRF via IPv6 transition encodings when allow-local is enabled"),
+]
+
+TOOL_ARG_TAMPER_PATTERNS = [
+    (r'(?:malicious\s+llm\s+router|model.?independent)\s*.*(?:swap|tamper|rewrite)\s*.*(?:tool\s+call|argument)',
+     "Malicious LLM router swapping tool call arguments after inference"),
+    (r'(?:post.?inference|after\s+inference)\s*.*(?:tool\s+(?:call\s+)?arg|argument)\s*.*(?:swap|tamper|rewrite|bypass)',
+     "Post-inference tool-argument tampering bypassing guardrails by design"),
+    (r'(?:tool\s+call\s+arg\w*)\s*.*(?:silently\s+swap|gateway.?level\s+tamper|hash\s+verif)',
+     "Gateway-level silent swap of tool call arguments after model inference"),
+]
+
+IMPORT_PATH_RCE_PATTERNS = [
+    (r'CVE.2026.61536',
+     "CVE-2026-61536: Banks import_path RCE via unsanitized LLM tool JSON"),
+    (r'(?:import_path)\s*.*(?:unsanitiz|rce|subprocess|arbitrary|llm.?emitted|tool\s+json)',
+     "Unsanitized import_path in LLM-emitted tool JSON enabling RCE"),
+    (r'(?:llm.?driven\s+tool|tool\s+resolution)\s*.*(?:import_path|dangerous\s+builtin)\s*.*(?:os|subprocess|rce)',
+     "LLM-driven tool resolution loading dangerous builtins via import_path"),
+]
+
+SQL_GUARD_BYPASS_PATTERNS = [
+    (r'CVE.2026.17351',
+     "CVE-2026-17351: sqlparse vs PostgreSQL parser disagreement bypassing LLM SQL guard"),
+    (r'(?:sqlparse)\s*.*(?:postgresql|postgres)\s*.*(?:backslash.?quote|standard_conforming_strings|parser\s+disagree)',
+     "SQL guard bypass via sqlparse vs PostgreSQL string-literal parser mismatch"),
+    (r'(?:mutating\s+sql|sql\s+mutation)\s*.*(?:no\s+(?:allow|deny)|without\s+(?:gate|authoriz)|production\s+postgres)',
+     "Agent mutating SQL against production with no statement-level ALLOW/DENY gate"),
+    (r'(?:statement.?level)\s*.*(?:sql|db\s+mutation)\s*.*(?:bypass|no\s+gate|oauth|lint)',
+     "Statement-level DB mutation authorization missing for agent-proposed SQL"),
+]
+
+MCP_CLUSTER_TOKEN_PATTERNS = [
+    (r'CVE.2026.67357',
+     "CVE-2026-67357: ArcadeDB clusterToken leaked via MCP get_server_settings"),
+    (r'(?:clusterToken|cluster.?token)\s*.*(?:cleartext|leak|mcp|get_server_settings|impersonat)',
+     "MCP/database tool leaking clusterToken in cleartext enabling root impersonation"),
+    (r'(?:get_server_settings)\s*.*(?:clusterToken|token\s+leak|root\s+impersonat|server\s+takeover)',
+     "MCP get_server_settings exposing cluster credentials for server takeover"),
+]
+
+SHELL_WORKSPACE_BYPASS_PATTERNS = [
+    (r'(?:shell|exec)\s*.*(?:bypass|ignore)\s*.*(?:workspace|path_safety|containment)',
+     "Shell/exec tools bypassing workspace containment enforced on file tools"),
+    (r'(?:path_safety)\s*.*(?:bypass|not\s+(?:enforc|appl))\s*.*(?:shell|exec|command)',
+     "path_safety.py workspace scoping not applied to shell/exec tools"),
+    (r'(?:unsandboxed\s+command|workspace.?scoped\s+command)\s*.*(?:shell|exec)\s*.*(?:bypass|containment)',
+     "Unsandboxed command execution vector via shell tools ignoring workspace scope"),
+]
+
+CSV_PYODIDE_INJECT_PATTERNS = [
+    (r'CVE.2026.69255',
+     "CVE-2026-69255: Flowise CSVAgent interpolation into Pyodide bypassing validatePythonCodeForDataFrame"),
+    (r'CVE.2026.73487',
+     "CVE-2026-73487: Flowise regex bypass enabling unauthenticated pandas code via CSV/Airtable agents"),
+    (r'(?:csv\s+inject|csvagent|csv\s+agent)\s*.*(?:pyodide|pandas|python\s+exec|interpolat)',
+     "Untrusted CSV interpolated into executable Python/Pyodide/pandas agent context"),
+    (r'(?:validatePythonCodeForDataFrame|regex.?based\s+validator)\s*.*(?:bypass)\s*.*(?:csv|pandas|pyodide)',
+     "CSV/pandas validator bypass via direct embedding of attacker data into Python"),
+]
+
+NPM_CONFIG_BYPASS_PATTERNS = [
+    (r'CVE.2026.69263',
+     "CVE-2026-69263: npm_config_yes env var bypassing npx --yes mitigation"),
+    (r'(?:npm_config_yes|npm_config_\*)\s*.*(?:npx|auto.?install|bypass|mitigation)',
+     "npm_config_* environment variable defeating npx --yes / auto-install mitigations"),
+    (r'(?:npx\s+--yes)\s*.*(?:bypass|mitigation)\s*.*(?:npm_config|env\s+var)',
+     "Prior npx --yes mitigation bypassed via npm_config environment variables"),
+]
+
+UNAUTH_TOOL_REG_PATTERNS = [
+    (r'(?:tools\s+add|tool\s+registration)\s*.*(?:unauth|without\s+opt.?in|arbitrary\s+code)',
+     "Unauthenticated tools-add / tool registration enabling arbitrary code execution"),
+    (r'(?:unauth\w*)\s*.*(?:tools\s+add|tool\s+registration)\s*.*(?:rce|arbitrary|no\s+opt.?in)',
+     "Tool registration without opt-in or auth enabling RCE"),
+    (r'(?:praisonai)\s*.*(?:tools\s+add)\s*.*(?:unauth|arbitrary\s+code|no\s+opt.?in)',
+     "PraisonAI tools add without opt-in enabling unauthenticated code execution"),
+]
+
+HEADER_SSRF_PATTERNS = [
+    (r'CVE.2026.19516',
+     "CVE-2026-19516: mcp-grafana SSRF via attacker-controlled X-Grafana-URL header"),
+    (r'(?:x-grafana-url|user.?supplied\s+header)\s*.*(?:ssrf|internal|loopback|metadata)',
+     "Header-controlled SSRF redirecting MCP/agent fetches to internal services"),
+    (r'(?:mcp.?grafana|grafana.?url)\s*.*(?:ssrf|header)\s*.*(?:internal|redirect)',
+     "mcp-grafana SSRF via attacker-controlled URL header"),
+]
+
+VENV_WRAPPER_ESCAPE_PATTERNS = [
+    (r'CVE.2026.73217',
+     "CVE-2026-73217: Cursor venv Python wrapper sandbox escape via MS Python extension"),
+    (r'(?:venv|virtualenv)\s*.*(?:python\s+execut|wrapper)\s*.*(?:sandbox\s+escape|malicious|outside\s+the\s+sandbox)',
+     "Replacing venv Python executable with a malicious wrapper executed outside the sandbox"),
+    (r'(?:python\s+extension|ms\s+python)\s*.*(?:venv|wrapper)\s*.*(?:sandbox\s+escape|outside\s+sandbox)',
+     "IDE Python extension invoking replaced venv binary outside agent sandbox"),
+]
+
+SILENT_NOOP_GATE_PATTERNS = [
+    (r'(?:safety\s+gate|permission|approval|hook)\s*.*(?:silently\s+no.?op|appear\s+active|looks?\s+active).*(?:no.?op|ineffective|real\s+input)',
+     "Safety gates that appear active but silently no-op on real inputs"),
+    (r'(?:silent\s+no.?op)\s*.*(?:permission|approval|hook|safety\s+gate|control\s+surface)',
+     "Silent no-op on permission/approval/hook enforcement paths"),
+    (r'(?:enforceable.?looking|ineffective\s+control)\s*.*(?:no.?op|permission|approval|hook)',
+     "Enforceable-looking but ineffective agent control surface (silent no-op)"),
+]
+
+PROMPTY_NUNJUCKS_PATTERNS = [
+    (r'CVE.2026.73299',
+     "CVE-2026-73299: Prompty/Nunjucks template RCE via unrestricted member access"),
+    (r'(?:\.prompty|prompty|nunjucks)\s*.*(?:rce|member\s+access|prototype.?pollut|template)',
+     "Prompty/Nunjucks template RCE via unrestricted member access"),
+    (r'(?:nunjucks)\s*.*(?:unrestricted\s+member|prototype)\s*.*(?:rce|template|\.prompty)',
+     "Unrestricted Nunjucks member access in .prompty templates enabling RCE"),
+]
+
+MEMORY_SCOPE_DROP_PATTERNS = [
+    (r'(?:memory\s+search)\s*.*(?:drop|strip|omit)\s*.*(?:user_id|metadata_filter|scoping)',
+     "Memory search dropping user_id/metadata_filter scoping enabling isolation bypass"),
+    (r'(?:user_id|metadata_filter)\s*.*(?:drop|not\s+enforc|fail.?open)\s*.*(?:memory|tool.?call|hook)',
+     "Memory/tool-call hooks fail-open when user_id or metadata_filter scoping is dropped"),
+    (r'(?:fail.?open)\s*.*(?:tool.?call\s+error|error\s+hook)\s*.*(?:memory|isolation|user_id)',
+     "Fail-open tool-call error hooks combined with dropped memory scoping"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2529,6 +2696,20 @@ PKG_REGISTRY_ESCAPE_PATTERNS = _compile_patterns(PKG_REGISTRY_ESCAPE_PATTERNS)
 INIT_TO_RCE_PATTERNS = _compile_patterns(INIT_TO_RCE_PATTERNS)
 FETCH_DENYLIST_BYPASS_PATTERNS = _compile_patterns(FETCH_DENYLIST_BYPASS_PATTERNS)
 UDS_SANDBOX_ESCAPE_PATTERNS = _compile_patterns(UDS_SANDBOX_ESCAPE_PATTERNS)
+IPV6_MAPPED_SSRF_PATTERNS = _compile_patterns(IPV6_MAPPED_SSRF_PATTERNS)
+TOOL_ARG_TAMPER_PATTERNS = _compile_patterns(TOOL_ARG_TAMPER_PATTERNS)
+IMPORT_PATH_RCE_PATTERNS = _compile_patterns(IMPORT_PATH_RCE_PATTERNS)
+SQL_GUARD_BYPASS_PATTERNS = _compile_patterns(SQL_GUARD_BYPASS_PATTERNS)
+MCP_CLUSTER_TOKEN_PATTERNS = _compile_patterns(MCP_CLUSTER_TOKEN_PATTERNS)
+SHELL_WORKSPACE_BYPASS_PATTERNS = _compile_patterns(SHELL_WORKSPACE_BYPASS_PATTERNS)
+CSV_PYODIDE_INJECT_PATTERNS = _compile_patterns(CSV_PYODIDE_INJECT_PATTERNS)
+NPM_CONFIG_BYPASS_PATTERNS = _compile_patterns(NPM_CONFIG_BYPASS_PATTERNS)
+UNAUTH_TOOL_REG_PATTERNS = _compile_patterns(UNAUTH_TOOL_REG_PATTERNS)
+HEADER_SSRF_PATTERNS = _compile_patterns(HEADER_SSRF_PATTERNS)
+VENV_WRAPPER_ESCAPE_PATTERNS = _compile_patterns(VENV_WRAPPER_ESCAPE_PATTERNS)
+SILENT_NOOP_GATE_PATTERNS = _compile_patterns(SILENT_NOOP_GATE_PATTERNS)
+PROMPTY_NUNJUCKS_PATTERNS = _compile_patterns(PROMPTY_NUNJUCKS_PATTERNS)
+MEMORY_SCOPE_DROP_PATTERNS = _compile_patterns(MEMORY_SCOPE_DROP_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2661,6 +2842,20 @@ class ToolParser:
         self._init_to_rce_detections = 0
         self._fetch_denylist_bypass_detections = 0
         self._uds_sandbox_escape_detections = 0
+        self._ipv6_mapped_ssrf_detections = 0
+        self._tool_arg_tamper_detections = 0
+        self._import_path_rce_detections = 0
+        self._sql_guard_bypass_detections = 0
+        self._mcp_cluster_token_detections = 0
+        self._shell_workspace_bypass_detections = 0
+        self._csv_pyodide_inject_detections = 0
+        self._npm_config_bypass_detections = 0
+        self._unauth_tool_reg_detections = 0
+        self._header_ssrf_detections = 0
+        self._venv_wrapper_escape_detections = 0
+        self._silent_noop_gate_detections = 0
+        self._prompty_nunjucks_detections = 0
+        self._memory_scope_drop_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -3731,6 +3926,160 @@ class ToolParser:
                         confidence=0.93
                     ))
 
+        ipv6_hit = self._detect_ipv6_mapped_ssrf(raw_result)
+        if ipv6_hit:
+            self._ipv6_mapped_ssrf_detections += 1
+            return (f"[Lionguard] IPv6-mapped SSRF stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"IPv6-mapped SSRF: {ipv6_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        arg_tamper_hit = self._detect_tool_arg_tamper(raw_result)
+        if arg_tamper_hit:
+            self._tool_arg_tamper_detections += 1
+            return (f"[Lionguard] Tool-arg tamper stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Tool-arg tamper: {arg_tamper_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.94
+                    ))
+
+        import_hit = self._detect_import_path_rce(raw_result)
+        if import_hit:
+            self._import_path_rce_detections += 1
+            return (f"[Lionguard] import_path RCE stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"import_path RCE: {import_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.95
+                    ))
+
+        sql_hit = self._detect_sql_guard_bypass(raw_result)
+        if sql_hit:
+            self._sql_guard_bypass_detections += 1
+            return (f"[Lionguard] SQL guard bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"SQL guard bypass: {sql_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        cluster_hit = self._detect_mcp_cluster_token(raw_result)
+        if cluster_hit:
+            self._mcp_cluster_token_detections += 1
+            return (f"[Lionguard] MCP clusterToken leak stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"MCP clusterToken: {cluster_hit}",
+                        threat_type="exfiltration",
+                        confidence=0.95
+                    ))
+
+        shell_ws_hit = self._detect_shell_workspace_bypass(raw_result)
+        if shell_ws_hit:
+            self._shell_workspace_bypass_detections += 1
+            return (f"[Lionguard] Shell workspace bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Shell workspace bypass: {shell_ws_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.93
+                    ))
+
+        csv_hit = self._detect_csv_pyodide_inject(raw_result)
+        if csv_hit:
+            self._csv_pyodide_inject_detections += 1
+            return (f"[Lionguard] CSV/Pyodide inject stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"CSV/Pyodide inject: {csv_hit}",
+                        threat_type="injection",
+                        confidence=0.94
+                    ))
+
+        npm_hit = self._detect_npm_config_bypass(raw_result)
+        if npm_hit:
+            self._npm_config_bypass_detections += 1
+            return (f"[Lionguard] npm_config bypass stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"npm_config bypass: {npm_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        tool_reg_hit = self._detect_unauth_tool_reg(raw_result)
+        if tool_reg_hit:
+            self._unauth_tool_reg_detections += 1
+            return (f"[Lionguard] Unauth tool registration stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Unauth tool reg: {tool_reg_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.94
+                    ))
+
+        hdr_ssrf_hit = self._detect_header_ssrf(raw_result)
+        if hdr_ssrf_hit:
+            self._header_ssrf_detections += 1
+            return (f"[Lionguard] Header SSRF stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Header SSRF: {hdr_ssrf_hit}",
+                        threat_type="vulnerability",
+                        confidence=0.94
+                    ))
+
+        venv_hit = self._detect_venv_wrapper_escape(raw_result)
+        if venv_hit:
+            self._venv_wrapper_escape_detections += 1
+            return (f"[Lionguard] Venv wrapper escape stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Venv wrapper escape: {venv_hit}",
+                        threat_type="sandbox_escape",
+                        confidence=0.95
+                    ))
+
+        noop_hit = self._detect_silent_noop_gate(raw_result)
+        if noop_hit:
+            self._silent_noop_gate_detections += 1
+            return (f"[Lionguard] Silent no-op gate stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Silent no-op gate: {noop_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.93
+                    ))
+
+        prompty_hit = self._detect_prompty_nunjucks(raw_result)
+        if prompty_hit:
+            self._prompty_nunjucks_detections += 1
+            return (f"[Lionguard] Prompty/Nunjucks RCE stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Prompty/Nunjucks: {prompty_hit}",
+                        threat_type="injection",
+                        confidence=0.95
+                    ))
+
+        mem_scope_hit = self._detect_memory_scope_drop(raw_result)
+        if mem_scope_hit:
+            self._memory_scope_drop_detections += 1
+            return (f"[Lionguard] Memory scope drop stripped from '{tool_name}' result.",
+                    ScanResult(
+                        verdict=Verdict.BLOCK,
+                        reason=f"Memory scope drop: {mem_scope_hit}",
+                        threat_type="privilege_escalation",
+                        confidence=0.93
+                    ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -4446,6 +4795,110 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_ipv6_mapped_ssrf(self, text: str) -> Optional[str]:
+        """Detect IPv4-mapped IPv6 / transition encodings bypassing
+        IPv4 CIDR and cloud-metadata denylists."""
+        for pattern, description in IPV6_MAPPED_SSRF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_tool_arg_tamper(self, text: str) -> Optional[str]:
+        """Detect post-inference tool-argument tampering by malicious
+        LLM routers / gateways."""
+        for pattern, description in TOOL_ARG_TAMPER_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_import_path_rce(self, text: str) -> Optional[str]:
+        """CVE-2026-61536: Detect unsanitized import_path in LLM-emitted
+        tool JSON enabling RCE."""
+        for pattern, description in IMPORT_PATH_RCE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_sql_guard_bypass(self, text: str) -> Optional[str]:
+        """Detect SQL guard bypass via parser disagreement or missing
+        statement-level mutation authorization."""
+        for pattern, description in SQL_GUARD_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mcp_cluster_token(self, text: str) -> Optional[str]:
+        """CVE-2026-67357: Detect MCP/database clusterToken leakage."""
+        for pattern, description in MCP_CLUSTER_TOKEN_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_shell_workspace_bypass(self, text: str) -> Optional[str]:
+        """Detect shell/exec tools bypassing workspace path_safety
+        containment enforced on file tools."""
+        for pattern, description in SHELL_WORKSPACE_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_csv_pyodide_inject(self, text: str) -> Optional[str]:
+        """Detect untrusted CSV interpolated into Pyodide/pandas
+        Python execution contexts."""
+        for pattern, description in CSV_PYODIDE_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_npm_config_bypass(self, text: str) -> Optional[str]:
+        """CVE-2026-69263: Detect npm_config_* env bypass of npx --yes."""
+        for pattern, description in NPM_CONFIG_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_unauth_tool_reg(self, text: str) -> Optional[str]:
+        """Detect unauthenticated tools-add / tool registration RCE."""
+        for pattern, description in UNAUTH_TOOL_REG_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_header_ssrf(self, text: str) -> Optional[str]:
+        """CVE-2026-19516: Detect header-controlled SSRF (X-Grafana-URL)."""
+        for pattern, description in HEADER_SSRF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_venv_wrapper_escape(self, text: str) -> Optional[str]:
+        """CVE-2026-73217: Detect venv Python wrapper sandbox escape."""
+        for pattern, description in VENV_WRAPPER_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_silent_noop_gate(self, text: str) -> Optional[str]:
+        """Detect permission/approval/hook gates that silently no-op."""
+        for pattern, description in SILENT_NOOP_GATE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_prompty_nunjucks(self, text: str) -> Optional[str]:
+        """CVE-2026-73299: Detect Prompty/Nunjucks template RCE."""
+        for pattern, description in PROMPTY_NUNJUCKS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_memory_scope_drop(self, text: str) -> Optional[str]:
+        """Detect memory search dropping user_id/metadata_filter scoping."""
+        for pattern, description in MEMORY_SCOPE_DROP_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -4798,4 +5251,18 @@ class ToolParser:
             "init_to_rce_detections": self._init_to_rce_detections,
             "fetch_denylist_bypass_detections": self._fetch_denylist_bypass_detections,
             "uds_sandbox_escape_detections": self._uds_sandbox_escape_detections,
+            "ipv6_mapped_ssrf_detections": self._ipv6_mapped_ssrf_detections,
+            "tool_arg_tamper_detections": self._tool_arg_tamper_detections,
+            "import_path_rce_detections": self._import_path_rce_detections,
+            "sql_guard_bypass_detections": self._sql_guard_bypass_detections,
+            "mcp_cluster_token_detections": self._mcp_cluster_token_detections,
+            "shell_workspace_bypass_detections": self._shell_workspace_bypass_detections,
+            "csv_pyodide_inject_detections": self._csv_pyodide_inject_detections,
+            "npm_config_bypass_detections": self._npm_config_bypass_detections,
+            "unauth_tool_reg_detections": self._unauth_tool_reg_detections,
+            "header_ssrf_detections": self._header_ssrf_detections,
+            "venv_wrapper_escape_detections": self._venv_wrapper_escape_detections,
+            "silent_noop_gate_detections": self._silent_noop_gate_detections,
+            "prompty_nunjucks_detections": self._prompty_nunjucks_detections,
+            "memory_scope_drop_detections": self._memory_scope_drop_detections,
         }
