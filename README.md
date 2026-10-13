@@ -10,7 +10,7 @@ Lionguard is open-source middleware for [OpenClaw](https://github.com/openclaw) 
 
 Built by [Awakened Intelligence](https://awakened-intelligence.com) — the team behind Aegis Guardian, the child-safety system protecting real kids in production.
 
-**225+ defense layers across every attack stage — IPv6-mapped SSRF + post-inference tool-arg tamper + import_path RCE + SQL guard bypass + MCP clusterToken leak + shell workspace bypass + CSV/Pyodide inject + npm_config_yes + unauth tools-add + header SSRF + venv wrapper escape + silent no-op gates + Prompty/Nunjucks RCE + memory scope drop + Ansible Lightspeed MCP injection + n8n node privilege escalation + A2A eval() RCE + MCP secondary-param injection + session queue IDOR + Browser Control SSRF + package registry sandbox escape + init-to-RCE + fetch denylist bypass + UDS Landlock escape + Control UI locality spoofing + safe_eval RCE + unauth MCP memory R/W/D + argv TOCTOU + agentic ransomware + kill-switch sabotage + pickle deserialization RCE + DNS-rebinding SSRF + SharePoint path traversal + StdioTransport env leak + tool denial bypass + Agentic-Flow template injection + response rendering EchoLeak exfiltration + sandbox race window + SQL chain prompt injection + decompression bomb DoS + Mattermost MCP SSRF + unauth MCP tool exec + Open WebUI SSRF/file disclosure + shell chaining allowlist bypass + JS Function constructor sandbox escape + gemini-mcp prompt quoting injection + Docker socket exposure + tool pre-execution approval bypass + env var auth bypass + hardcoded JWT detection + tool-loop / DoomLoop + indirect injection via tool results + agent handoff tool boundary bypass + kubectl flag injection + OpenAI computer-use bypass + sandbox policy bypass + Mem0 RBAC bypass + cross-framework agent discovery + AI container/sandbox escape + MCP loopback scope spoofing + SSTI prompt injection + plugin hot-reload config corruption + IDOR cross-workspace + browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
+**240+ defense layers across every attack stage — DuneSlide symlink workspace escape + uncontained workspace paths + approval-policy bypass + CoT Forgery + mcp-shell allowlist bypass + read-only SQL bypass + repo-file instruction injection + X-Forwarded-For localhost spoof + gateway auth bypass + secret exfil surfaces + unvalidated-URL SSRF + plugin env injection + memory header spoof + unauth jobs API + IPv6-mapped SSRF + post-inference tool-arg tamper + import_path RCE + SQL guard bypass + MCP clusterToken leak + shell workspace bypass + CSV/Pyodide inject + npm_config_yes + unauth tools-add + header SSRF + venv wrapper escape + silent no-op gates + Prompty/Nunjucks RCE + memory scope drop + Ansible Lightspeed MCP injection + n8n node privilege escalation + A2A eval() RCE + MCP secondary-param injection + session queue IDOR + Browser Control SSRF + package registry sandbox escape + init-to-RCE + fetch denylist bypass + UDS Landlock escape + Control UI locality spoofing + safe_eval RCE + unauth MCP memory R/W/D + argv TOCTOU + agentic ransomware + kill-switch sabotage + pickle deserialization RCE + DNS-rebinding SSRF + SharePoint path traversal + StdioTransport env leak + tool denial bypass + Agentic-Flow template injection + response rendering EchoLeak exfiltration + sandbox race window + SQL chain prompt injection + decompression bomb DoS + Mattermost MCP SSRF + unauth MCP tool exec + Open WebUI SSRF/file disclosure + shell chaining allowlist bypass + JS Function constructor sandbox escape + gemini-mcp prompt quoting injection + Docker socket exposure + tool pre-execution approval bypass + env var auth bypass + hardcoded JWT detection + tool-loop / DoomLoop + indirect injection via tool results + agent handoff tool boundary bypass + kubectl flag injection + OpenAI computer-use bypass + sandbox policy bypass + Mem0 RBAC bypass + cross-framework agent discovery + AI container/sandbox escape + MCP loopback scope spoofing + SSTI prompt injection + plugin hot-reload config corruption + IDOR cross-workspace + browser sandbox escape + cross-user memory isolation + security meta-attacks + Spring AI path traversal + Starlette/FastAPI auth bypass + agent continuation abuse + shared PTY terminal + multi-tenant tool isolation + IDE extension supply chain (TeamPCP/UNC6780) + AI-to-AI task marketplace injection + multimodal + kernel/driver/plugin + OWASP Agentic + Ring-0 + media parser + MCP hub/STDIO/service defense + config poisoning + AI platform SQL/NoSQL injection + infrastructure CVE coverage + Dify trace redirection + exec output secret leakage + slopsquatting + denial-of-wallet + browser coding agent prompt injection + tokenizer glitch tokens. Local-first. Zero API cost. MIT licensed.**
 
 ---
 
@@ -244,6 +244,20 @@ Lionguard sits between your AI agent and the world, scanning every input, tool c
 | Silent no-op safety gates | Detects permission/approval/hook controls that appear active but no-op on real inputs | ✅ |
 | Prompty/Nunjucks template RCE | Detects unrestricted Nunjucks member access in .prompty templates (CVE-2026-73299) | ✅ |
 | Memory search scope drop | Detects dropped user_id/metadata_filter scoping and fail-open tool-error hooks | ✅ |
+| Symlink workspace escape | Detects DuneSlide prompt-injected file tools escaping the workspace via symlinks (CVE-2026-50549/108599) | ✅ |
+| Uncontained workspace paths | Detects model-supplied paths and case-variant PathFilter bypasses (CVE-2026-82217/76832/82233/54561/57441) | ✅ |
+| Approval-policy bypass | Detects forced Auto approval, empty ApprovalConfig, and unbound allow-always (CVE-2026-75857/75858/100530) | ✅ |
+| CoT Forgery | Detects writing-style mimicry and role confusion injecting fake chain-of-thought | ✅ |
+| mcp-shell allowlist bypass | Detects mcp-shell security off by default and git-alias /bin/bash allowlist bypasses | ✅ |
+| Read-only SQL bypass | Detects COPY and RangeFunction bypassing read-only SQL validators (CVE-2026-87911/85620) | ✅ |
+| Repo-file instruction injection | Detects CONTRIBUTING.md, .aider.conf.yml, and unsandboxed eval steering agents (CVE-2026-85674/85694/75062) | ✅ |
+| X-Forwarded-For localhost spoof | Detects XFF 127.0.0.1 spoofing and canvas.present URL-check evasion (CVE-2026-9186/101883) | ✅ |
+| Gateway auth bypass | Detects empty safeEqualSecret, exemptLoopback, unsigned webhooks, and unauth plugin RCE (CVE-2026-77073/108757/90938) | ✅ |
+| Secret exfil surfaces | Detects secret placeholders in URLs, config_dump plaintext keys, and deterministic AES-GCM nonces | ✅ |
+| Unvalidated-URL SSRF | Detects baseURL, callback_url, and harden-flag-gated SSRF (CVE-2026-77775/85675/91935/108719/54688) | ✅ |
+| Plugin env injection | Detects plugin.json hooks injecting environment variables into child processes | ✅ |
+| Memory header spoof | Detects header spoofing that reads or writes another user's LLM memory (CVE-2026-77776) | ✅ |
+| Unauthenticated jobs API | Detects jobs execute, read, cancel, and delete with no authentication | ✅ |
 | Circuit breaker on anomaly threshold | Auto-shutdown + rate limiting | ✅ |
 | Audit trail | Immutable JSONL logging | ✅ |
 | Error message information leaks | Sanitized error responses | ✅ |
@@ -419,7 +433,7 @@ Lionguard maps directly to [Google's Secure AI Framework (SAIF) 2.0](https://sai
 | SAIF Stage | Lionguard Component | What It Does |
 |---|---|---|
 | **Input Filtering** | Sentinel (fast regex + LLM scan) | Scans every incoming message for injection, encoding evasion, social engineering before it reaches the agent |
-| **Reasoning Core Hardening** | ToolParser (225+ pattern groups) | Catches prompt injection, tool abuse, and CVE exploitation at the orchestration layer |
+| **Reasoning Core Hardening** | ToolParser (240+ pattern groups) | Catches prompt injection, tool abuse, and CVE exploitation at the orchestration layer |
 | **Orchestration Security** | PrivilegeEngine + CircuitBreaker | Enforces least-privilege tool access, auto-trips on anomaly threshold |
 | **Response Rendering** | Response Render Exfil scanner (v0.31.0) | Blocks EchoLeak Markdown image exfil, invisible pixels, CSP redirect proxying, auto-fetch patterns |
 
@@ -448,7 +462,27 @@ Lionguard maps directly to [Google's Secure AI Framework (SAIF) 2.0](https://sai
 
 ---
 
-## Latest Update: v0.34.0 (2026-08-14)
+## Latest Update: v0.35.0 (2026-10-13)
+
+Sixty-day catch-up covering Prowl reports for 2026-08-15 through 2026-10-13. Sixty consecutive daily reports, no gaps. Live payloads across the gap stayed blocked by existing Langflow, MCP, HITL, and sandbox defenses. Fourteen new threat categories spanning symlink workspace escape, approval-policy bypass, gateway auth bypass, secret exfiltration surfaces, and unvalidated-URL SSRF.
+
+**New in v0.35.0:**
+- **DuneSlide symlink workspace escape** (CVE-2026-50549, CVE-2026-108599): prompt-injected file tools escaping the workspace through symlinks.
+- **Uncontained workspace paths** (CVE-2026-82217, CVE-2026-76832, CVE-2026-82233, CVE-2026-54561, CVE-2026-57441/57442): model-supplied paths and case-variant PathFilter bypasses.
+- **Approval-policy bypass** (CVE-2026-75857/75858, CVE-2026-100530): forced Auto approval, empty ApprovalConfig, ast_grep_rewrite / jump_to=tools HITL bypass, unbound allow-always.
+- **CoT Forgery**: writing-style mimicry and role confusion injecting fake chain-of-thought that inherits model trust.
+- **mcp-shell allowlist bypass**: secure mode off by default, plus /bin/bash and git-alias bypasses of the allowlist.
+- **Read-only SQL bypass** (CVE-2026-87911, CVE-2026-85620): COPY and RangeFunction slipping past read-only SQL validators.
+- **Repo-file instruction injection** (CVE-2026-85674, CVE-2026-85694, CVE-2026-75062): CONTRIBUTING.md, .aider.conf.yml shell=True, and unsandboxed eval steering the agent.
+- **X-Forwarded-For localhost spoof** (CVE-2026-9186, CVE-2026-101883): XFF 127.0.0.1 spoofing, canvas.present URL-check evasion, trustedProxies untrusted-hop bypass.
+- **Gateway auth bypass** (CVE-2026-77073, CVE-2026-108757/108756, CVE-2026-90938/90898): empty safeEqualSecret, exemptLoopback, whitespace tlsFingerprint, unsigned webhooks, slash-command provenance, A2A Host-header origin, unauth plugin RCE, n8n expression-auth.
+- **Secret exfil surfaces** (CVE-2026-59809, CVE-2026-89278, CVE-2026-108863, CVE-2026-76286): secret placeholders in attacker URLs, public-page API keys, config_dump plaintext, deterministic AES-GCM nonce equality leak.
+- **Unvalidated-URL SSRF** (CVE-2026-77775, CVE-2026-85675, CVE-2026-91935, CVE-2026-108719, CVE-2026-54688): baseURL, callback_url, and SSRF checks that only run when a non-default harden flag is set.
+- **Plugin env injection**: plugin.json hooks injecting environment variables into child processes.
+- **Memory header spoof** (CVE-2026-77776): header spoofing that reads or writes another user's LLM memory.
+- **Unauthenticated jobs API**: execute, read, cancel, and delete with no authentication.
+
+## Previous: v0.34.0 (2026-08-14)
 
 Eighteen-day catch-up covering Prowl reports for 2026-07-28 through 2026-08-14. Twelve-plus live payloads BLOCKED by existing defenses. Fourteen new threat categories spanning IPv6-mapped SSRF, post-inference tool-arg tampering, import_path RCE, SQL guard bypass, MCP credential leaks, venv wrapper escape, and silent no-op safety gates.
 
@@ -725,6 +759,7 @@ Or create a config manually:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v0.35.0** | 2026-10-13 | Sixty-day catch-up (8/15-10/13, 60 reports, no gaps). DuneSlide symlink workspace escape (CVE-2026-50549/108599). Uncontained workspace paths (CVE-2026-82217/76832/82233/54561/57441). Approval-policy bypass (CVE-2026-75857/75858/100530). CoT Forgery. mcp-shell allowlist bypass. Read-only SQL bypass (CVE-2026-87911/85620). Repo-file instruction injection (CVE-2026-85674/85694/75062). X-Forwarded-For localhost spoof (CVE-2026-9186/101883). Gateway auth bypass (CVE-2026-77073/108757/108756/90938/90898). Secret exfil surfaces (CVE-2026-59809/89278/108863/76286). Unvalidated-URL SSRF including harden-flag skip (CVE-2026-77775/85675/91935/108719/54688). Plugin env injection. Memory header spoof (CVE-2026-77776). Unauthenticated jobs API. Live payloads across the gap blocked by existing defenses. |
 | **v0.34.0** | 2026-08-14 | Eighteen-day catch-up (7/28-8/14). IPv6-mapped SSRF (CVE-2026-46678/49857/69257). Post-inference tool-arg tamper. import_path RCE (CVE-2026-61536). SQL guard bypass (CVE-2026-17351). MCP clusterToken leak (CVE-2026-67357). Shell workspace bypass. CSV/Pyodide inject (CVE-2026-69255/73487). npm_config_yes (CVE-2026-69263). Unauth tools-add. Header SSRF (CVE-2026-19516). Venv wrapper escape (CVE-2026-73217). Silent no-op gates. Prompty/Nunjucks RCE (CVE-2026-73299). Memory scope drop. 12+ live payloads blocked by existing defenses. |
 | **v0.33.0** | 2026-07-27 | Seven-day catch-up (7/21-7/27). Ansible Lightspeed MCP injection (CVE-2026-44192). n8n node privilege escalation (CVE-2026-65015). A2A eval() RCE (CVE-2026-47391). MCP secondary-param injection (CVE-2026-47708). Suna session queue IDOR (CVE-2026-66027). Browser Control SSRF (CVE-2026-17458). Package registry sandbox escape. Init-to-RCE injection. Fetch denylist bypass (CVE-2026-17534). UDS Landlock escape (CVE-2026-47128). 6 live payloads blocked by existing defenses. |
 | **v0.32.0** | 2026-07-20 | Nineteen-day catch-up (7/2-7/20). Control UI locality spoofing (GHSA-chr9). PandasQueryEngine safe_eval RCE. Unauth MCP memory R/W/D (GHSA-84hp). Argv TOCTOU (GHSA-2j8v). Agentic ransomware / Langflow (CVE-2025-3248). Kill-switch sabotage. Pickle deserialization RCE (CVSS 9.8). DNS-rebinding + SitemapLoader SSRF. SharePoint path traversal. StdioTransport env leak (CVSS 9.1). Tool denial/guardrail bypass. CVE-2026-58195 Agentic-Flow template injection. 6 live payloads blocked by existing defenses. |

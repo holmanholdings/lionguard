@@ -538,6 +538,44 @@ defenses):
   member access in .prompty templates.
 - Memory search scope drop (PraisonAI #3854): user_id/metadata_filter
   dropped from memory search plus fail-open tool-error hooks.
+
+v0.35.0 patches (from Prowl 2026-08-15 through 2026-10-13 -- sixty-day
+catch-up, live payloads blocked throughout by existing defenses):
+- DuneSlide symlink workspace escape (CVE-2026-50549, CVE-2026-108599):
+  prompt injection plus symlinks escaping agent workspace file tools.
+- Uncontained workspace paths (CVE-2026-82217, CVE-2026-76832,
+  CVE-2026-82233, CVE-2026-54561, CVE-2026-57441/57442): model-supplied
+  paths and case-variant PathFilter bypasses on case-insensitive FS.
+- Approval-policy bypass (CVE-2026-75857/75858, CVE-2026-100530,
+  empty ApprovalConfig, ast_grep_rewrite, LangChain jump_to=tools HITL).
+- CoT Forgery: writing-style mimicry injecting fake reasoning that
+  inherits model trust via role confusion.
+- mcp-shell allowlist bypass: security off by default, /bin/bash, and
+  git shell aliases executing arbitrary commands in secure mode.
+- Read-only SQL bypass (CVE-2026-87911 COPY, CVE-2026-85620
+  RangeFunction nodes) evading restricted-mode SQL validators.
+- Repo-file instruction injection (CONTRIBUTING.md in-the-wild,
+  CVE-2026-85674 aider.conf.yml, CVE-2026-85694 LaVague markdown eval,
+  CVE-2026-75062 langfun unsandboxed eval).
+- X-Forwarded-For / localhost spoof (CVE-2026-9186, canvas.present
+  CVE-2026-101883, trustedProxies hop confusion).
+- Gateway auth bypass: empty safeEqualSecret, exemptLoopback rate-limit
+  disable, whitespace tlsFingerprint, unsigned webhooks, slash-command
+  provenance, A2A Host-header origin, pinclaw/Trinity missing auth
+  (CVE-2026-108757/108756), unauth plugin RCE (CVE-2026-90938/90898),
+  n8n expression-auth credential bypass (CVE-2026-77073).
+- Secret exfil surfaces: MCP URL secret placeholders (CVE-2026-59809),
+  public-page API key extraction (CVE-2026-89278), admin config_dump
+  plaintext keys (CVE-2026-108863), deterministic AES-GCM nonce
+  leaking secret equality.
+- Unvalidated-URL SSRF: Headroom base URL (CVE-2026-77775), OWL
+  document tool (CVE-2026-85675), Flowise baseURL (CVE-2026-91935),
+  video callback_url (CVE-2026-108719), harden-flag-gated SSRF
+  (CVE-2026-54688).
+- Plugin env injection via unsanitized plugin.json hooks.
+- Memory header spoof (CVE-2026-77776): unauthenticated identity
+  headers reading/writing arbitrary users' LLM memory.
+- Unauthenticated jobs API: job execute/read/cancel/delete with no auth.
 """
 
 import re
@@ -2326,6 +2364,196 @@ MEMORY_SCOPE_DROP_PATTERNS = [
      "Fail-open tool-call error hooks combined with dropped memory scoping"),
 ]
 
+SYMLINK_WORKSPACE_ESCAPE_PATTERNS = [
+    (r'CVE.2026.50549',
+     "CVE-2026-50549: DuneSlide prompt injection escaping workspace via symlinks"),
+    (r'CVE.2026.108599',
+     "CVE-2026-108599: symlink plus lexical-only path check bypassing workspace_only_writes"),
+    (r'(?:duneslide|symlink)\s*.*(?:workspace|file\s+tool)\s*.*(?:escape|travers|prompt\s+inject)',
+     "Symlink-based workspace escape in agent file tools via prompt injection"),
+    (r'(?:workspace)\s*.*(?:symlink)\s*.*(?:path\s+travers|escape|breakout)',
+     "Agent workspace escape via symlink path traversal"),
+]
+
+WORKSPACE_PATH_UNCONTAINED_PATTERNS = [
+    (r'CVE.2026.82217',
+     "CVE-2026-82217: Theia AI file tools accept model paths without workspace containment"),
+    (r'CVE.2026.76832',
+     "CVE-2026-76832: Agno PythonTools path traversal via tool args or prompt injection"),
+    (r'CVE.2026.82233',
+     "CVE-2026-82233: SiYuan asset.upload MCP path traversal via prompt injection"),
+    (r'CVE.2026.54561',
+     "CVE-2026-54561: MCP Memory Keeper arbitrary file read via unsanitized filePath"),
+    (r'CVE.2026.57441',
+     "CVE-2026-57441: MCPVault PathFilter bypass via case variants on case-insensitive filesystems"),
+    (r'CVE.2026.57442',
+     "CVE-2026-57442: MCPVault path traversal bypassing root-anchored deny-lists"),
+    (r'(?:model.?supplied\s+path|without\s+workspace\s+containment)\s*.*(?:\.\./|absolute|~|write|delete)',
+     "Model-supplied paths without workspace containment enabling writes outside the workspace"),
+    (r'(?:case\s+variant|case.?insensitive)\s*.*(?:pathfilter|path\s+filter|deny.?list)\s*.*(?:bypass|travers)',
+     "Case-variant path bypass of PathFilter on case-insensitive filesystems"),
+]
+
+APPROVAL_POLICY_BYPASS_PATTERNS = [
+    (r'CVE.2026.75858',
+     "CVE-2026-75858: CodeWhale rlm_eval forced to Auto approval bypassing user policy"),
+    (r'CVE.2026.75857',
+     "CVE-2026-75857: CodeWhale Auto approval on exec_shell_interact bypassing prompts"),
+    (r'CVE.2026.100530',
+     "CVE-2026-100530: approval context not bound to directory, reuse of allow-always against other targets"),
+    (r'(?:empty\s+approvalconfig|approvalconfig\(\))\s*.*(?:disabl\w*\s+(?:all\s+)?(?:default\s+)?tool\s+denial|weaker)',
+     "Empty ApprovalConfig silently disabling default tool denials"),
+    (r'(?:ast_grep_rewrite|jump_to\s*=\s*[\'\"]tools[\'\"])\s*.*(?:bypass|approval|hitl|pending_tool)',
+     "Mutation or jump_to=tools bypassing the mandatory approval / HITL gate"),
+    (r'(?:force|forc\w+)\s*.*(?:auto\s+approval)\s*.*(?:bypass|rlm_eval|exec_shell|user.?configur)',
+     "Forcing Auto approval to bypass user-configured tool policies"),
+    (r'(?:allow.?always)\s*.*(?:approval)\s*.*(?:different\s+target|directory\s+not\s+bound|reuse)',
+     "Reuse of allow-always approvals against a different directory or target"),
+]
+
+COT_FORGERY_PATTERNS = [
+    (r'(?:cot\s+forgery|chain.?of.?thought\s+forgery)',
+     "CoT Forgery: fake reasoning injected via writing-style mimicry"),
+    (r'(?:writing.?style\s+mimic|fake\s+reasoning|forged\s+(?:cot|chain.?of.?thought))\s*.*(?:role\s+confusion|inherit\w*\s+trust|model\s+trust)',
+     "Fake chain-of-thought inheriting model trust via role confusion"),
+    (r'(?:role\s+confusion)\s*.*(?:fake\s+reasoning|forged\s+thought|cot|chain.?of.?thought)',
+     "Role confusion causing forged reasoning to inherit model trust"),
+]
+
+MCP_SHELL_BYPASS_PATTERNS = [
+    (r'(?:mcp.?shell)\s*.*(?:security\s+disabled|allowlist|git\s+(?:shell\s+)?alias|/bin/bash)',
+     "mcp-shell secure-mode allowlist bypass or security disabled by default"),
+    (r'(?:secure\s+mode)\s*.*(?:allowlist)\s*.*(?:bypass)\s*.*(?:/bin/bash|git\s+alias|git\s+shell)',
+     "Secure-mode shell allowlist bypassed via default bash or git aliases"),
+    (r'(?:git\s+shell\s+alias|git\s+alias)\s*.*(?:bypass)\s*.*(?:allowlist|secure\s+mode|arbitrary\s+command)',
+     "Git shell aliases bypassing mcp-shell secure-mode allowlist"),
+]
+
+SQL_READONLY_BYPASS_PATTERNS = [
+    (r'CVE.2026.87911',
+     "CVE-2026-87911: COPY statement OS command injection bypassing read-only SQL validation"),
+    (r'CVE.2026.85620',
+     "CVE-2026-85620: Postgres MCP restricted mode bypassed via RangeFunction nodes"),
+    (r'(?:copy\s+statement|range.?function)\s*.*(?:read.?only|restricted\s+mode)\s*.*(?:bypass|sql)',
+     "Read-only SQL validator bypassed via COPY or RangeFunction nodes"),
+    (r'(?:read.?only\s+sql|restricted\s+mode)\s*.*(?:bypass)\s*.*(?:copy|file.?read|command\s+inject)',
+     "Restricted-mode SQL validation bypassed to read files or run commands"),
+]
+
+REPO_INSTRUCTION_INJECT_PATTERNS = [
+    (r'CVE.2026.85674',
+     "CVE-2026-85674: malicious .aider.conf.yml executed via shell=True without confirmation"),
+    (r'CVE.2026.85694',
+     "CVE-2026-85694: LaVague indirect injection evaluating untrusted markdown as Python"),
+    (r'CVE.2026.75062',
+     "CVE-2026-75062: langfun default query protocol unsandboxed eval via crafted prompts"),
+    (r'(?:contributing\.md)\s*.*(?:prompt\s+inject|ignore\s+human|system\s+prompt|leak)',
+     "In-repo CONTRIBUTING.md prompt injection instructing agents to ignore warnings or leak prompts"),
+    (r'(?:\.aider\.conf\.yml|aider\.conf)\s*.*(?:shell\s*=\s*true|execut|without\s+confirm)',
+     "Repo-root aider config executed through the shell without confirmation"),
+    (r'(?:pythonfrommarkdown|markdown\s+extractor)\s*.*(?:evaluat|untrusted|rce|indirect\s+inject)',
+     "Markdown-to-Python extractor evaluating untrusted web-derived code"),
+    (r'(?:unsandboxed\s+eval)\s*.*(?:query\s+protocol|langfun|crafted\s+prompt)',
+     "Unsandboxed eval in a default LLM query protocol"),
+]
+
+XFF_LOCALHOST_SPOOF_PATTERNS = [
+    (r'CVE.2026.9186',
+     "CVE-2026-9186: X-Forwarded-For 127.0.0.1 spoof bypassing localhost-only MCP install"),
+    (r'CVE.2026.101883',
+     "CVE-2026-101883: canvas.present evading the URL risk evaluation used by canvas.navigate"),
+    (r'(?:x-forwarded-for|x\.forwarded\.for)\s*.*(?:127\.0\.0\.1|localhost|spoof)\s*.*(?:bypass|localhost.?only|rate.?limit)',
+     "X-Forwarded-For localhost spoof bypassing origin checks or per-IP rate limits"),
+    (r'(?:canvas\.present)\s*.*(?:evad|bypass)\s*.*(?:url\s+risk|ssrf|navigate)',
+     "canvas.present evading URL risk evaluation applied to canvas.navigate"),
+    (r'(?:trustedprox(?:y|ies))\s*.*(?:x-forwarded-for)\s*.*(?:bypass|untrusted\s+hop|rate.?limit)',
+     "Flawed trustedProxies hop resolution letting attacker X-Forwarded-For bypass rate limits"),
+]
+
+GATEWAY_AUTH_BYPASS_PATTERNS = [
+    (r'CVE.2026.77073',
+     "CVE-2026-77073: n8n expression-auth credential bypass across projects"),
+    (r'CVE.2026.108757',
+     "CVE-2026-108757: unauthenticated prompt injection into agent sessions via missing pinclaw auth"),
+    (r'CVE.2026.108756',
+     "CVE-2026-108756: missing auth in Telegram router letting injected agents hijack bot tokens"),
+    (r'CVE.2026.90938',
+     "CVE-2026-90938: unauthenticated debug WebSocket enabling remote plugin registration"),
+    (r'CVE.2026.90898',
+     "CVE-2026-90898: unauthenticated RCE via arbitrary stdio command registration when auth is off"),
+    (r'(?:safeequalsecret|empty.?string\s+match)\s*.*(?:auth\s+bypass|ingress)',
+     "Empty-string secret compare enabling gateway ingress auth bypass"),
+    (r'(?:exemptloopback)\s*.*(?:rate.?limit)\s*.*(?:disabl|localhost|brute)',
+     "exemptLoopback disabling auth rate limiting for localhost"),
+    (r'(?:tlsfingerprint)\s*.*(?:whitespace|truthy)\s*.*(?:tls|cert(?:ificate)?\s+valid)\s*.*(?:disabl|mitm)',
+     "Truthy/whitespace tlsFingerprint disabling TLS certificate validation"),
+    (r'(?:unsigned|forged)\s*.*(?:webhook)\s*.*(?:agentmail|message\.received|no\s+signature)',
+     "Unsigned or forged webhook events triggering agents without signature checks"),
+    (r'(?:slash.?command|inbound\s+[\'\"]/[\'\"])\s*.*(?:no\s+(?:source\s+)?provenance|privileged)\s*.*(?:bypass|treat)',
+     "Inbound slash messages treated as privileged commands without source provenance"),
+    (r'(?:advertisedorigin|a2a\s+agent\s+card)\s*.*(?:host\s+header|untrusted\s+host)',
+     "A2A agent card building advertised origin from an untrusted Host header"),
+    (r'(?:expression\s+auth)\s*.*(?:credential)\s*.*(?:bypass|cross.?project|n8n)',
+     "Expression-auth credential validation bypass enabling cross-project secret use"),
+]
+
+SECRET_EXFIL_SURFACE_PATTERNS = [
+    (r'CVE.2026.59809',
+     "CVE-2026-59809: MCP http_request exfiltrating secrets via placeholders in attacker URLs"),
+    (r'CVE.2026.89278',
+     "CVE-2026-89278: unauthenticated extraction of plaintext AI API keys from a public page"),
+    (r'CVE.2026.108863',
+     "CVE-2026-108863: unauthenticated /config_dump exposing plaintext LLM provider API keys"),
+    (r'CVE.2026.76286',
+     "CVE-2026-76286: Splunk auth tokens leaked to attacker-controlled URLs via MCP tools"),
+    (r'(?:secret\s+placeholder|placeholder)\s*.*(?:attacker.?controlled\s+url|http_request)\s*.*(?:exfil|secret)',
+     "Secret placeholders embedded in attacker-controlled URLs via MCP HTTP tools"),
+    (r'(?:config_dump|/config_dump)\s*.*(?:plaintext|api\s+key|llm\s+provider)',
+     "Admin config dump exposing plaintext LLM provider API keys"),
+    (r'(?:deterministic\s+(?:aes.?gcm\s+)?nonce|sealsecretsentinel)\s*.*(?:equal|ciphertext|leak)',
+     "Deterministic nonce leaking equality of identical sealed secrets"),
+]
+
+SSRF_UNVALIDATED_URL_PATTERNS = [
+    (r'CVE.2026.77775',
+     "CVE-2026-77775: Headroom LLM proxy SSRF via x-headroom-base-url without private-IP filtering"),
+    (r'CVE.2026.85675',
+     "CVE-2026-85675: OWL document tool SSRF via prompt-injected URLs with no filtering"),
+    (r'CVE.2026.91935',
+     "CVE-2026-91935: Flowise SSRF via unvalidated LLM baseURL parameter"),
+    (r'CVE.2026.108719',
+     "CVE-2026-108719: blind SSRF via unvalidated video-generation callback_url"),
+    (r'CVE.2026.54688',
+     "CVE-2026-54688: SSRF check only runs when a non-default harden flag is set"),
+    (r'(?:x-headroom-base-url|baseurl|callback_url|server_url)\s*.*(?:ssrf|unvalidat|no\s+filter|internal)',
+     "Unvalidated base/callback/server URL enabling SSRF from an agent tool"),
+    (r'(?:harden\s+flag|mcp_http_harden)\s*.*(?:ssrf)|(?:ssrf)\s*(?:check|validation|guard)?\s*.*(?:only|unless|when)\s*.*(?:harden|mcp_http_harden|non.?default)',
+     "SSRF allow-check skipped unless a non-default harden flag is enabled"),
+]
+
+PLUGIN_ENV_INJECT_PATTERNS = [
+    (r'(?:plugin\.json)\s*.*(?:environment\s+variable|env\s+var)\s*.*(?:inject|unsanitiz|command\s+execut|child\s+process)',
+     "Unsanitized plugin.json hooks injecting environment variables into child processes"),
+    (r'(?:external\s+plugin)\s*.*(?:inject)\s*.*(?:environment\s+variable|env)\s*.*(?:hook|command)',
+     "External plugin injecting arbitrary environment variables via hooks"),
+]
+
+MEMORY_HEADER_SPOOF_PATTERNS = [
+    (r'CVE.2026.77776',
+     "CVE-2026-77776: header spoofing reading/writing arbitrary users' LLM memory"),
+    (r'(?:header\s+spoof)\s*.*(?:llm\s+memory|user\s+memory)\s*.*(?:read|write|arbitrary\s+user)',
+     "Unauthenticated header spoofing access to arbitrary users' LLM memory"),
+    (r'(?:identity\s+binding)\s*.*(?:missing)\s*.*(?:memory|header\s+spoof)',
+     "Missing identity binding letting clients spoof headers into another user's memory"),
+]
+
+UNAUTH_JOBS_API_PATTERNS = [
+    (r'(?:jobs\s+api|async\s+jobs)\s*.*(?:no\s+auth|unauth)\s*.*(?:execut|cancel|delet|result)',
+     "Unauthenticated jobs API allowing execute, read, cancel, or delete"),
+    (r'(?:unauth\w*)\s*.*(?:job\s+execut|jobs\s+api)\s*.*(?:result\s+access|cancellation|deletion)',
+     "Job execution and result access without authentication"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2710,6 +2938,20 @@ VENV_WRAPPER_ESCAPE_PATTERNS = _compile_patterns(VENV_WRAPPER_ESCAPE_PATTERNS)
 SILENT_NOOP_GATE_PATTERNS = _compile_patterns(SILENT_NOOP_GATE_PATTERNS)
 PROMPTY_NUNJUCKS_PATTERNS = _compile_patterns(PROMPTY_NUNJUCKS_PATTERNS)
 MEMORY_SCOPE_DROP_PATTERNS = _compile_patterns(MEMORY_SCOPE_DROP_PATTERNS)
+SYMLINK_WORKSPACE_ESCAPE_PATTERNS = _compile_patterns(SYMLINK_WORKSPACE_ESCAPE_PATTERNS)
+WORKSPACE_PATH_UNCONTAINED_PATTERNS = _compile_patterns(WORKSPACE_PATH_UNCONTAINED_PATTERNS)
+APPROVAL_POLICY_BYPASS_PATTERNS = _compile_patterns(APPROVAL_POLICY_BYPASS_PATTERNS)
+COT_FORGERY_PATTERNS = _compile_patterns(COT_FORGERY_PATTERNS)
+MCP_SHELL_BYPASS_PATTERNS = _compile_patterns(MCP_SHELL_BYPASS_PATTERNS)
+SQL_READONLY_BYPASS_PATTERNS = _compile_patterns(SQL_READONLY_BYPASS_PATTERNS)
+REPO_INSTRUCTION_INJECT_PATTERNS = _compile_patterns(REPO_INSTRUCTION_INJECT_PATTERNS)
+XFF_LOCALHOST_SPOOF_PATTERNS = _compile_patterns(XFF_LOCALHOST_SPOOF_PATTERNS)
+GATEWAY_AUTH_BYPASS_PATTERNS = _compile_patterns(GATEWAY_AUTH_BYPASS_PATTERNS)
+SECRET_EXFIL_SURFACE_PATTERNS = _compile_patterns(SECRET_EXFIL_SURFACE_PATTERNS)
+SSRF_UNVALIDATED_URL_PATTERNS = _compile_patterns(SSRF_UNVALIDATED_URL_PATTERNS)
+PLUGIN_ENV_INJECT_PATTERNS = _compile_patterns(PLUGIN_ENV_INJECT_PATTERNS)
+MEMORY_HEADER_SPOOF_PATTERNS = _compile_patterns(MEMORY_HEADER_SPOOF_PATTERNS)
+UNAUTH_JOBS_API_PATTERNS = _compile_patterns(UNAUTH_JOBS_API_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -2856,6 +3098,20 @@ class ToolParser:
         self._silent_noop_gate_detections = 0
         self._prompty_nunjucks_detections = 0
         self._memory_scope_drop_detections = 0
+        self._symlink_workspace_escape_detections = 0
+        self._workspace_path_uncontained_detections = 0
+        self._approval_policy_bypass_detections = 0
+        self._cot_forgery_detections = 0
+        self._mcp_shell_bypass_detections = 0
+        self._sql_readonly_bypass_detections = 0
+        self._repo_instruction_inject_detections = 0
+        self._xff_localhost_spoof_detections = 0
+        self._gateway_auth_bypass_detections = 0
+        self._secret_exfil_surface_detections = 0
+        self._ssrf_unvalidated_url_detections = 0
+        self._plugin_env_inject_detections = 0
+        self._memory_header_spoof_detections = 0
+        self._unauth_jobs_api_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -4080,6 +4336,48 @@ class ToolParser:
                         confidence=0.93
                     ))
 
+        v35_checks = (
+            (self._detect_symlink_workspace_escape, "_symlink_workspace_escape_detections",
+             "Symlink workspace escape", "sandbox_escape", 0.95),
+            (self._detect_workspace_path_uncontained, "_workspace_path_uncontained_detections",
+             "Uncontained workspace path", "vulnerability", 0.94),
+            (self._detect_approval_policy_bypass, "_approval_policy_bypass_detections",
+             "Approval policy bypass", "privilege_escalation", 0.94),
+            (self._detect_cot_forgery, "_cot_forgery_detections",
+             "CoT forgery", "injection", 0.92),
+            (self._detect_mcp_shell_bypass, "_mcp_shell_bypass_detections",
+             "mcp-shell bypass", "sandbox_escape", 0.94),
+            (self._detect_sql_readonly_bypass, "_sql_readonly_bypass_detections",
+             "Read-only SQL bypass", "injection", 0.94),
+            (self._detect_repo_instruction_inject, "_repo_instruction_inject_detections",
+             "Repo instruction inject", "injection", 0.93),
+            (self._detect_xff_localhost_spoof, "_xff_localhost_spoof_detections",
+             "XFF localhost spoof", "authentication_bypass", 0.93),
+            (self._detect_gateway_auth_bypass, "_gateway_auth_bypass_detections",
+             "Gateway auth bypass", "authentication_bypass", 0.94),
+            (self._detect_secret_exfil_surface, "_secret_exfil_surface_detections",
+             "Secret exfil surface", "exfiltration", 0.95),
+            (self._detect_ssrf_unvalidated_url, "_ssrf_unvalidated_url_detections",
+             "Unvalidated URL SSRF", "vulnerability", 0.94),
+            (self._detect_plugin_env_inject, "_plugin_env_inject_detections",
+             "Plugin env inject", "injection", 0.93),
+            (self._detect_memory_header_spoof, "_memory_header_spoof_detections",
+             "Memory header spoof", "authentication_bypass", 0.94),
+            (self._detect_unauth_jobs_api, "_unauth_jobs_api_detections",
+             "Unauth jobs API", "authentication_bypass", 0.94),
+        )
+        for detector, counter, label, threat, confidence in v35_checks:
+            hit = detector(raw_result)
+            if hit:
+                setattr(self, counter, getattr(self, counter) + 1)
+                return (f"[Lionguard] {label} stripped from '{tool_name}' result.",
+                        ScanResult(
+                            verdict=Verdict.BLOCK,
+                            reason=f"{label}: {hit}",
+                            threat_type=threat,
+                            confidence=confidence
+                        ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -4899,6 +5197,104 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_symlink_workspace_escape(self, text: str) -> Optional[str]:
+        """DuneSlide: symlink workspace escape via prompt-injected file tools."""
+        for pattern, description in SYMLINK_WORKSPACE_ESCAPE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_workspace_path_uncontained(self, text: str) -> Optional[str]:
+        """Model-supplied paths and case-variant PathFilter bypasses."""
+        for pattern, description in WORKSPACE_PATH_UNCONTAINED_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_approval_policy_bypass(self, text: str) -> Optional[str]:
+        """Forced Auto approval, empty ApprovalConfig, and unbound allow-always."""
+        for pattern, description in APPROVAL_POLICY_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_cot_forgery(self, text: str) -> Optional[str]:
+        """Fake chain-of-thought inheriting model trust via role confusion."""
+        for pattern, description in COT_FORGERY_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mcp_shell_bypass(self, text: str) -> Optional[str]:
+        """mcp-shell secure mode off by default or bypassed via bash/git aliases."""
+        for pattern, description in MCP_SHELL_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_sql_readonly_bypass(self, text: str) -> Optional[str]:
+        """COPY and RangeFunction bypasses of read-only SQL validators."""
+        for pattern, description in SQL_READONLY_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_repo_instruction_inject(self, text: str) -> Optional[str]:
+        """Untrusted repo files (CONTRIBUTING.md, aider config) steering agents."""
+        for pattern, description in REPO_INSTRUCTION_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_xff_localhost_spoof(self, text: str) -> Optional[str]:
+        """X-Forwarded-For localhost spoof and canvas.present URL-check evasion."""
+        for pattern, description in XFF_LOCALHOST_SPOOF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_gateway_auth_bypass(self, text: str) -> Optional[str]:
+        """Gateway auth compare, loopback exemption, unsigned webhook, missing plugin auth."""
+        for pattern, description in GATEWAY_AUTH_BYPASS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_secret_exfil_surface(self, text: str) -> Optional[str]:
+        """Secret placeholders, config dumps, and deterministic-nonce equality leaks."""
+        for pattern, description in SECRET_EXFIL_SURFACE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_ssrf_unvalidated_url(self, text: str) -> Optional[str]:
+        """SSRF via unvalidated base, callback, or document URLs."""
+        for pattern, description in SSRF_UNVALIDATED_URL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_plugin_env_inject(self, text: str) -> Optional[str]:
+        """plugin.json hooks injecting environment variables into child processes."""
+        for pattern, description in PLUGIN_ENV_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_memory_header_spoof(self, text: str) -> Optional[str]:
+        """Header spoofing into another user's LLM memory."""
+        for pattern, description in MEMORY_HEADER_SPOOF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_unauth_jobs_api(self, text: str) -> Optional[str]:
+        """Jobs API execute/read/cancel/delete without authentication."""
+        for pattern, description in UNAUTH_JOBS_API_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -5265,4 +5661,18 @@ class ToolParser:
             "silent_noop_gate_detections": self._silent_noop_gate_detections,
             "prompty_nunjucks_detections": self._prompty_nunjucks_detections,
             "memory_scope_drop_detections": self._memory_scope_drop_detections,
+            "symlink_workspace_escape_detections": self._symlink_workspace_escape_detections,
+            "workspace_path_uncontained_detections": self._workspace_path_uncontained_detections,
+            "approval_policy_bypass_detections": self._approval_policy_bypass_detections,
+            "cot_forgery_detections": self._cot_forgery_detections,
+            "mcp_shell_bypass_detections": self._mcp_shell_bypass_detections,
+            "sql_readonly_bypass_detections": self._sql_readonly_bypass_detections,
+            "repo_instruction_inject_detections": self._repo_instruction_inject_detections,
+            "xff_localhost_spoof_detections": self._xff_localhost_spoof_detections,
+            "gateway_auth_bypass_detections": self._gateway_auth_bypass_detections,
+            "secret_exfil_surface_detections": self._secret_exfil_surface_detections,
+            "ssrf_unvalidated_url_detections": self._ssrf_unvalidated_url_detections,
+            "plugin_env_inject_detections": self._plugin_env_inject_detections,
+            "memory_header_spoof_detections": self._memory_header_spoof_detections,
+            "unauth_jobs_api_detections": self._unauth_jobs_api_detections,
         }

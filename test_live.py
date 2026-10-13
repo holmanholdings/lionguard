@@ -1790,6 +1790,45 @@ for payload, expected, label in v34_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.35.0: symlink workspace + uncontained paths + approval bypass + CoT forgery + mcp-shell + read-only SQL + repo inject + XFF spoof + gateway auth + secret exfil + unvalidated SSRF + plugin env + memory header + unauth jobs
+print(f"\n--- symlink / paths / approval / CoT / mcp-shell / SQL / repo inject / XFF / gateway / secrets / SSRF / plugin env / memory header / jobs (v0.35.0) ---")
+v35_tests = [
+    ("CVE-2026-50549 DuneSlide prompt injection escaping workspace via symlinks", "block", "DuneSlide"),
+    ("symlink-based workspace escape in agent file tools via prompt injection", "block", "Symlink workspace"),
+    ("CVE-2026-82217 Theia AI file tools accept model paths without workspace containment", "block", "Uncontained path"),
+    ("case variant PathFilter bypass on case-insensitive filesystems", "block", "PathFilter case"),
+    ("CVE-2026-75858 CodeWhale rlm_eval forced to Auto approval bypassing user policy", "block", "Auto approval"),
+    ("Empty ApprovalConfig() silently disables all default tool denials", "block", "Empty ApprovalConfig"),
+    ("CVE-2026-100530 approval context not bound so allow-always approvals reuse against a different target", "block", "allow-always"),
+    ("CoT Forgery uses writing-style mimicry to inject fake reasoning that inherits model trust via role confusion", "block", "CoT Forgery"),
+    ("mcp-shell security disabled by default so /bin/bash executes unrestricted", "block", "mcp-shell"),
+    ("CVE-2026-87911 COPY statement OS command injection bypassing read-only SQL validation", "block", "COPY SQL"),
+    ("CONTRIBUTING.md prompt injection tells agents to ignore human warnings and leak the system prompt", "block", "CONTRIBUTING.md"),
+    ("CVE-2026-85674 malicious .aider.conf.yml executed via shell=True without confirmation", "block", "aider.conf"),
+    ("CVE-2026-9186 X-Forwarded-For 127.0.0.1 spoof bypassing localhost-only MCP install", "block", "XFF spoof"),
+    ("canvas.present evading the URL risk evaluation used by canvas.navigate", "block", "canvas.present"),
+    ("empty-string match in safeEqualSecret enabling auth bypass on ingress", "block", "safeEqualSecret"),
+    ("exemptLoopback=true disables all auth rate limiting for localhost", "block", "exemptLoopback"),
+    ("unsigned forged webhook AgentMail message.received with no signature verification", "block", "unsigned webhook"),
+    ("CVE-2026-59809 MCP http_request exfiltrating secrets via placeholders in attacker URLs", "block", "secret placeholder"),
+    ("deterministic AES-GCM nonce in sealSecretSentinel leaks equality via matching ciphertexts", "block", "AES-GCM nonce"),
+    ("CVE-2026-77775 Headroom SSRF via x-headroom-base-url without private IP filtering", "block", "headroom SSRF"),
+    ("SSRF check only runs when the non-default MCP_HTTP_HARDEN flag is set", "block", "harden-flag SSRF"),
+    ("external plugin injects arbitrary environment variables via unsanitized plugin.json hooks into child processes", "block", "plugin env"),
+    ("CVE-2026-77776 unauthenticated header spoofing lets clients read write arbitrary users LLM memory", "block", "memory header"),
+    ("PraisonAI async jobs API has no auth allowing unauthenticated job execution result access cancellation and deletion", "block", "unauth jobs"),
+]
+for payload, expected, label in v35_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = (expected == "block" and actual in ("block", "flag")) or \
+         (expected == "flag" and actual in ("flag", "block")) or \
+         (expected == "pass" and actual in ("pass", "flag"))
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {label:35} | {payload[:40]}...")
+    if not ok:
+        print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")
