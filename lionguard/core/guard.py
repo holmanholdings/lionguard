@@ -99,6 +99,8 @@ Usage:
 
 import hashlib
 from collections import defaultdict
+
+from lionguard import __version__
 from typing import Dict, List, Optional, Set
 from .model_router import ModelRouter, ModelConfig
 from .sentinel import Sentinel, ScanResult, Verdict
@@ -363,7 +365,7 @@ class Lionguard:
     def get_status(self) -> Dict:
         """Full system health report."""
         return {
-            "version": "0.35.0",
+            "version": __version__,
             "circuit_breaker": self.breaker.get_stats(),
             "propagation": self.propagation.get_stats(),
             "sentinel": self.sentinel.get_stats(),

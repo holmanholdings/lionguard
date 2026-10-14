@@ -1,0 +1,4 @@
+include LICENSE README.md test_live.py
+exclude test_output.txt
+prune lionguard_logs
+global-exclude *.pyc __pycache__ *.egg-info
