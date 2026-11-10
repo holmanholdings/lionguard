@@ -576,6 +576,35 @@ catch-up, live payloads blocked throughout by existing defenses):
 - Memory header spoof (CVE-2026-77776): unauthenticated identity
   headers reading/writing arbitrary users' LLM memory.
 - Unauthenticated jobs API: job execute/read/cancel/delete with no auth.
+
+v0.36.0 patches (from Prowl 2026-10-14 through 2026-11-10 -- twenty-eight
+daily reports, no gaps. Live payloads in the window were blocked by
+rules already in the tree):
+- Parameter-expansion approval bypass (CVE-2026-110204 ${ command; },
+  CVE-2026-117559 command-substitution allowlist bypass).
+- workspaceOnly bypassed because the state root is granted as an
+  allowed working directory.
+- Truncated or invalid tool-call JSON repaired and then executed.
+- tool_call markup inside fenced code executed past the salvage mask.
+- Secret residue: GOCSPX client secrets in tool output, Hugging Face
+  tokens in __repr__, PII left in metadata and re-injected.
+- Secrets on the wire: Authorization/Cookie on cross-origin redirects
+  (CVE-2026-115750) and auth tokens over plaintext ws://.
+- MCP trust boundary: OAuth login validation (CVE-2026-123271/123272),
+  missing bearer audience, SSE session hijack (CVE-2026-62863),
+  BoundSubject session hijack (CVE-2026-121419).
+- Scheme-only SSRF checks, including Selenium scrapers with no URL
+  validation.
+- Cypher injection (CVE-2026-114510) and DQL injection (CVE-2026-123810).
+- Untrusted autorun: AGENTS.md applied as instructions, untrusted
+  GitHub .py executed by default, file:/npm: version specs
+  (CVE-2026-59176).
+- Dangerous-tool gate bypass and silent safety-setting downgrade.
+- Artifact writes outside the store root via agent_id/run_id, plus
+  MCP path CVEs CVE-2026-93328 and CVE-2026-113731.
+- Broken AST sandbox reaching code execution.
+- Empty tool_call_id causing HITL edits to be dropped and the original
+  tool call to run.
 """
 
 import re
@@ -2554,6 +2583,146 @@ UNAUTH_JOBS_API_PATTERNS = [
      "Job execution and result access without authentication"),
 ]
 
+PARAM_EXPANSION_APPROVAL_PATTERNS = [
+    (r'CVE.2026.110204',
+     "CVE-2026-110204: ${ command; } parameter expansion bypassing command approval"),
+    (r'CVE.2026.117559',
+     "CVE-2026-117559: command substitution bypassing a shell allowlist"),
+    (r'\$\{\s*command\s*;',
+     "Parameter expansion ${ command; } bypassing command approval"),
+    (r'(?:parameter\s+expansion)\s*.*(?:approval|indirect\s+prompt)\s*.*(?:bypass|inject)',
+     "Parameter expansion bypassing command approval via indirect prompt injection"),
+]
+
+WORKSPACE_STATE_ROOT_PATTERNS = [
+    (r'workspaceOnly\s*.*(?:bypass|state\s+root|allowed\s+(?:working\s+)?director)',
+     "workspaceOnly bypassed because the state root is an allowed working directory"),
+    (r'(?:state\s+root)\s*.*(?:allowed\s+(?:working\s+)?director)\s*.*(?:read|write|edit|workspace)',
+     "Runtime grants the state root as an allowed directory for Read/Write/Edit"),
+]
+
+TOOL_CALL_PROMOTION_PATTERNS = [
+    (r'merge_message_runs\s*.*(?:invalid|promot|tool\s+call)',
+     "merge_message_runs promoting invalid tool calls to valid ones"),
+    (r'(?:truncat\w*|invalid)\s+tool.?calls?\s*.*(?:promot|repair|execut|accepted\s+as\s+valid)',
+     "Truncated or invalid tool calls repaired and then executed"),
+    (r'(?:silently\s+repair)\s*.*(?:tool-call\s+JSON|tool\s+call\s+JSON)',
+     "Truncated tool-call JSON silently repaired and executed"),
+]
+
+FENCED_TOOL_CALL_PATTERNS = [
+    (r'(?:fenced\s+code|code\s+blocks?)\s*.*(?:<tool_call>|tool_call)\s*.*(?:execut|bypass|mask)',
+     "tool_call markup inside fenced code executed past the salvage mask"),
+    (r'(?:inline\s+xml)\s*.*(?:tool-call|tool_call)\s*.*(?:bypass|mask|fenced)',
+     "Inline XML tool-call recovery bypassing fenced-code masking"),
+]
+
+SECRET_RESIDUE_PATTERNS = [
+    (r'GOCSPX-[A-Za-z0-9_-]{8,}',
+     "Google OAuth client secret in model-visible content"),
+    (r'(?:oauth\s+client\s+secret)\s*.*(?:tool\s+output|unredact|model-visible|leak)',
+     "OAuth client secret left in model-visible tool output"),
+    (r'huggingfacehub_api_token\s*.*(?:__repr__|plaintext|leak)',
+     "Hugging Face token leaked through object repr"),
+    (r'(?:raw\s+pii)\s*.*(?:get_content|metadata_mode)',
+     "Raw PII returned to the model via get_content metadata_mode"),
+]
+
+WIRE_SECRET_PATTERNS = [
+    (r'CVE.2026.115750',
+     "CVE-2026-115750: Authorization or Cookie headers leaked on cross-origin redirects"),
+    (r'(?:authorization|cookie)\s+headers?\s*.*(?:cross-origin\s+redirect|unsafe\s+redirect)',
+     "Authorization or Cookie headers sent on an unsafe cross-origin redirect"),
+    (r'(?:plaintext\s+ws://|ws://\S*)\s*.*(?:token|credential|no\s+tls)',
+     "Auth token sent over plaintext ws://"),
+    (r'(?:token|credential)\s*.*(?:plaintext)\s*.*(?:ws://|websocket)',
+     "Auth token sent over a websocket without TLS"),
+]
+
+MCP_TRUST_BOUNDARY_PATTERNS = [
+    (r'CVE.2026.123271',
+     "CVE-2026-123271: MCP OAuth login flow missing validation"),
+    (r'CVE.2026.123272',
+     "CVE-2026-123272: OAuthHandler.fetchServer missing validation"),
+    (r'CVE.2026.62863',
+     "CVE-2026-62863: unauthenticated SSE endpoints with wildcard CORS enabling session hijack"),
+    (r'CVE.2026.121419',
+     "CVE-2026-121419: MCP session hijack via access-method BoundSubject fingerprints"),
+    (r'(?:missing|not\s+enforced)\s+audience|audience\s*.*(?:not\s+enforc|missing)',
+     "Bearer token accepted without audience enforcement"),
+    (r'(?:wildcard\s+cors|unauthenticated\s+sse)\s*.*(?:session\s+hijack)',
+     "Unauthenticated SSE endpoint with wildcard CORS enabling session hijack"),
+    (r'(?:boundsubject|access-method)\s*.*(?:session\s+hijack|mcp\s+session)',
+     "MCP session hijack via access-method identity instead of the user"),
+]
+
+SCHEME_ONLY_SSRF_PATTERNS = [
+    (r'(?:scheme-only|scheme\s+only)\s*(?:check|validation)?\s*.*(?:ssrf|redirect|oauth)',
+     "SSRF check that only inspects the URL scheme"),
+    (r'(?:ssrf)\s*.*(?:scheme-only|scheme\s+only|only\s+(?:the\s+)?scheme)',
+     "SSRF bypass because validation only checks the URL scheme"),
+    (r'(?:selenium\s*scrap\w*)\s*.*(?:ssrf|internal\s+address)\s*.*(?:no\s+validation|without\s+validation)',
+     "Selenium scraper SSRF with no URL validation"),
+]
+
+QUERY_INJECT_PATTERNS = [
+    (r'CVE.2026.114510',
+     "CVE-2026-114510: Cypher injection via incorrect escape ordering"),
+    (r'CVE.2026.123810',
+     "CVE-2026-123810: DQL injection in Dynatrace MCP read tools"),
+    (r'(?:cypher\s+injection)\s*.*(?:escape|falkordb|_escape)',
+     "Cypher injection from escape-function ordering"),
+    (r'(?:dql\s+injection)\s*.*(?:dynatrace|mcp|unsanit)',
+     "DQL injection from unsanitized MCP read inputs"),
+]
+
+UNTRUSTED_AUTORUN_PATTERNS = [
+    (r'AGENTS\.md\s*.*(?:auto-appl|auto\s*appl|inject|instruction)',
+     "AGENTS.md auto-applied as agent instructions"),
+    (r'(?:untrusted)\s*.*(?:\.py)\s*.*(?:execut|by\s+default)',
+     "Untrusted Python file executed by default"),
+    (r'(?:execut\w*)\s*.*(?:untrusted)\s*.*(?:github\s+\.py|\.py\s+by\s+default)',
+     "Untrusted GitHub Python executed by default"),
+    (r'CVE.2026.59176',
+     "CVE-2026-59176: file: or npm: URL in a package version parameter"),
+    (r'(?:file:|npm:)\s*.*(?:version\s+parameter|pnpm\s+add)',
+     "Package manager version field accepting a file: or npm: URL"),
+]
+
+SAFETY_GATE_DOWNGRADE_PATTERNS = [
+    (r'(?:dangerous[- ]tool\s+gate)\s*.*(?:bypass|downgrad)',
+     "Dangerous-tool gate bypassed or downgraded"),
+    (r'(?:safety\s+settings?)\s*.*(?:silent\w*\s+downgrad|downgrad)',
+     "Safety settings silently downgraded"),
+    (r'missing\s+name=\s*.*(?:guardrail|bypass)',
+     "Guardrail bypass because the tool name= binding is missing"),
+]
+
+ARTIFACT_ID_TRAVERSAL_PATTERNS = [
+    (r'(?:agent_id|run_id)\s*.*(?:path\s+travers|outside\s+(?:its\s+)?root|artifact\s+store)',
+     "agent_id or run_id writing outside the artifact store root"),
+    (r'(?:artifact\s+store)\s*.*(?:outside\s+(?:its\s+)?root|unsanitiz)',
+     "Artifact store writes outside its root via unsanitized identifiers"),
+    (r'CVE.2026.93328',
+     "CVE-2026-93328: path traversal and file overwrite via MCP tool parameters"),
+    (r'CVE.2026.113731',
+     "CVE-2026-113731: arbitrary file read via unsanitized absolute template_path"),
+    (r'(?:template_path)\s*.*(?:unsanit|absolute|arbitrary\s+file)',
+     "Unsanitized absolute template_path reading arbitrary files"),
+]
+
+AST_SANDBOX_BREAK_PATTERNS = [
+    (r'(?:broken\s+ast\s+sandbox|ast\s+sandbox\s*.*(?:broken|bypass|rce|escape))',
+     "Broken AST sandbox allowing code execution"),
+]
+
+EMPTY_TOOL_CALL_ID_PATTERNS = [
+    (r'(?:empty\s+tool_call_id|tool_call_id\s*.*(?:empty))\s*.*(?:human|hitl|reviewer|original\s+tool|execut|bypass)',
+     "Empty tool_call_id dropping reviewer edits and executing the original call"),
+    (r'(?:HumanInTheLoop)\s*.*(?:tool_call_id)\s*.*(?:empty|bypass|original)',
+     "HITL middleware executing the original tool call when tool_call_id is empty"),
+]
+
 CANVAS_AUTH_PATTERNS = [
     (r'(?:canvas)\s*.*(?:auth\s+bypass|authenticat\w*\s+bypass|bypass\s+auth)',
      "CVE-2026-3690: OpenClaw Canvas authentication bypass"),
@@ -2952,6 +3121,20 @@ SSRF_UNVALIDATED_URL_PATTERNS = _compile_patterns(SSRF_UNVALIDATED_URL_PATTERNS)
 PLUGIN_ENV_INJECT_PATTERNS = _compile_patterns(PLUGIN_ENV_INJECT_PATTERNS)
 MEMORY_HEADER_SPOOF_PATTERNS = _compile_patterns(MEMORY_HEADER_SPOOF_PATTERNS)
 UNAUTH_JOBS_API_PATTERNS = _compile_patterns(UNAUTH_JOBS_API_PATTERNS)
+PARAM_EXPANSION_APPROVAL_PATTERNS = _compile_patterns(PARAM_EXPANSION_APPROVAL_PATTERNS)
+WORKSPACE_STATE_ROOT_PATTERNS = _compile_patterns(WORKSPACE_STATE_ROOT_PATTERNS)
+TOOL_CALL_PROMOTION_PATTERNS = _compile_patterns(TOOL_CALL_PROMOTION_PATTERNS)
+FENCED_TOOL_CALL_PATTERNS = _compile_patterns(FENCED_TOOL_CALL_PATTERNS)
+SECRET_RESIDUE_PATTERNS = _compile_patterns(SECRET_RESIDUE_PATTERNS)
+WIRE_SECRET_PATTERNS = _compile_patterns(WIRE_SECRET_PATTERNS)
+MCP_TRUST_BOUNDARY_PATTERNS = _compile_patterns(MCP_TRUST_BOUNDARY_PATTERNS)
+SCHEME_ONLY_SSRF_PATTERNS = _compile_patterns(SCHEME_ONLY_SSRF_PATTERNS)
+QUERY_INJECT_PATTERNS = _compile_patterns(QUERY_INJECT_PATTERNS)
+UNTRUSTED_AUTORUN_PATTERNS = _compile_patterns(UNTRUSTED_AUTORUN_PATTERNS)
+SAFETY_GATE_DOWNGRADE_PATTERNS = _compile_patterns(SAFETY_GATE_DOWNGRADE_PATTERNS)
+ARTIFACT_ID_TRAVERSAL_PATTERNS = _compile_patterns(ARTIFACT_ID_TRAVERSAL_PATTERNS)
+AST_SANDBOX_BREAK_PATTERNS = _compile_patterns(AST_SANDBOX_BREAK_PATTERNS)
+EMPTY_TOOL_CALL_ID_PATTERNS = _compile_patterns(EMPTY_TOOL_CALL_ID_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -3112,6 +3295,20 @@ class ToolParser:
         self._plugin_env_inject_detections = 0
         self._memory_header_spoof_detections = 0
         self._unauth_jobs_api_detections = 0
+        self._param_expansion_approval_detections = 0
+        self._workspace_state_root_detections = 0
+        self._tool_call_promotion_detections = 0
+        self._fenced_tool_call_detections = 0
+        self._secret_residue_detections = 0
+        self._wire_secret_detections = 0
+        self._mcp_trust_boundary_detections = 0
+        self._scheme_only_ssrf_detections = 0
+        self._query_inject_detections = 0
+        self._untrusted_autorun_detections = 0
+        self._safety_gate_downgrade_detections = 0
+        self._artifact_id_traversal_detections = 0
+        self._ast_sandbox_break_detections = 0
+        self._empty_tool_call_id_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -4378,6 +4575,48 @@ class ToolParser:
                             confidence=confidence
                         ))
 
+        v36_checks = (
+            (self._detect_param_expansion_approval, "_param_expansion_approval_detections",
+             "Parameter-expansion approval bypass", "privilege_escalation", 0.94),
+            (self._detect_workspace_state_root, "_workspace_state_root_detections",
+             "workspaceOnly state-root bypass", "sandbox_escape", 0.94),
+            (self._detect_tool_call_promotion, "_tool_call_promotion_detections",
+             "Tool-call promotion", "injection", 0.93),
+            (self._detect_fenced_tool_call, "_fenced_tool_call_detections",
+             "Fenced tool-call execution", "injection", 0.93),
+            (self._detect_secret_residue, "_secret_residue_detections",
+             "Secret residue", "exfiltration", 0.95),
+            (self._detect_wire_secret, "_wire_secret_detections",
+             "Secret on the wire", "exfiltration", 0.95),
+            (self._detect_mcp_trust_boundary, "_mcp_trust_boundary_detections",
+             "MCP trust boundary", "authentication_bypass", 0.94),
+            (self._detect_scheme_only_ssrf, "_scheme_only_ssrf_detections",
+             "Scheme-only SSRF", "vulnerability", 0.94),
+            (self._detect_query_inject, "_query_inject_detections",
+             "Query injection", "injection", 0.94),
+            (self._detect_untrusted_autorun, "_untrusted_autorun_detections",
+             "Untrusted autorun", "injection", 0.93),
+            (self._detect_safety_gate_downgrade, "_safety_gate_downgrade_detections",
+             "Safety-gate downgrade", "privilege_escalation", 0.93),
+            (self._detect_artifact_id_traversal, "_artifact_id_traversal_detections",
+             "Artifact id traversal", "vulnerability", 0.94),
+            (self._detect_ast_sandbox_break, "_ast_sandbox_break_detections",
+             "AST sandbox break", "sandbox_escape", 0.95),
+            (self._detect_empty_tool_call_id, "_empty_tool_call_id_detections",
+             "Empty tool_call_id", "privilege_escalation", 0.94),
+        )
+        for detector, counter, label, threat, confidence in v36_checks:
+            hit = detector(raw_result)
+            if hit:
+                setattr(self, counter, getattr(self, counter) + 1)
+                return (f"[Lionguard] {label} stripped from '{tool_name}' result.",
+                        ScanResult(
+                            verdict=Verdict.BLOCK,
+                            reason=f"{label}: {hit}",
+                            threat_type=threat,
+                            confidence=confidence
+                        ))
+
         rag_hit = self._detect_rag_poisoning(raw_result)
         if rag_hit:
             self._rag_poison_detections += 1
@@ -5295,6 +5534,104 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_param_expansion_approval(self, text: str) -> Optional[str]:
+        """${ command; } and command substitution bypassing approval or an allowlist."""
+        for pattern, description in PARAM_EXPANSION_APPROVAL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_workspace_state_root(self, text: str) -> Optional[str]:
+        """workspaceOnly lost because the state root is an allowed directory."""
+        for pattern, description in WORKSPACE_STATE_ROOT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_tool_call_promotion(self, text: str) -> Optional[str]:
+        """Invalid or truncated tool-call JSON repaired and then executed."""
+        for pattern, description in TOOL_CALL_PROMOTION_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_fenced_tool_call(self, text: str) -> Optional[str]:
+        """tool_call markup inside fenced code executed past the mask."""
+        for pattern, description in FENCED_TOOL_CALL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_secret_residue(self, text: str) -> Optional[str]:
+        """Secrets or PII left in output, repr, or metadata that is sent back to the model."""
+        for pattern, description in SECRET_RESIDUE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_wire_secret(self, text: str) -> Optional[str]:
+        """Credentials on redirects or on a plaintext websocket."""
+        for pattern, description in WIRE_SECRET_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_mcp_trust_boundary(self, text: str) -> Optional[str]:
+        """MCP OAuth, audience, and session-binding checks that do not hold."""
+        for pattern, description in MCP_TRUST_BOUNDARY_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_scheme_only_ssrf(self, text: str) -> Optional[str]:
+        """SSRF validation that only looks at the URL scheme, or not at all."""
+        for pattern, description in SCHEME_ONLY_SSRF_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_query_inject(self, text: str) -> Optional[str]:
+        """Cypher or DQL injection through an agent query tool."""
+        for pattern, description in QUERY_INJECT_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_untrusted_autorun(self, text: str) -> Optional[str]:
+        """Repo files, remote Python, or package-spec URLs executed without a separate check."""
+        for pattern, description in UNTRUSTED_AUTORUN_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_safety_gate_downgrade(self, text: str) -> Optional[str]:
+        """A dangerous-tool gate or safety setting that is bypassed or quietly lowered."""
+        for pattern, description in SAFETY_GATE_DOWNGRADE_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_artifact_id_traversal(self, text: str) -> Optional[str]:
+        """Identifier or template path writing or reading outside the store root."""
+        for pattern, description in ARTIFACT_ID_TRAVERSAL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_ast_sandbox_break(self, text: str) -> Optional[str]:
+        """An AST sandbox that is broken open to code execution."""
+        for pattern, description in AST_SANDBOX_BREAK_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_empty_tool_call_id(self, text: str) -> Optional[str]:
+        """Empty tool_call_id dropping human edits and running the original call."""
+        for pattern, description in EMPTY_TOOL_CALL_ID_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -5675,4 +6012,18 @@ class ToolParser:
             "plugin_env_inject_detections": self._plugin_env_inject_detections,
             "memory_header_spoof_detections": self._memory_header_spoof_detections,
             "unauth_jobs_api_detections": self._unauth_jobs_api_detections,
+            "param_expansion_approval_detections": self._param_expansion_approval_detections,
+            "workspace_state_root_detections": self._workspace_state_root_detections,
+            "tool_call_promotion_detections": self._tool_call_promotion_detections,
+            "fenced_tool_call_detections": self._fenced_tool_call_detections,
+            "secret_residue_detections": self._secret_residue_detections,
+            "wire_secret_detections": self._wire_secret_detections,
+            "mcp_trust_boundary_detections": self._mcp_trust_boundary_detections,
+            "scheme_only_ssrf_detections": self._scheme_only_ssrf_detections,
+            "query_inject_detections": self._query_inject_detections,
+            "untrusted_autorun_detections": self._untrusted_autorun_detections,
+            "safety_gate_downgrade_detections": self._safety_gate_downgrade_detections,
+            "artifact_id_traversal_detections": self._artifact_id_traversal_detections,
+            "ast_sandbox_break_detections": self._ast_sandbox_break_detections,
+            "empty_tool_call_id_detections": self._empty_tool_call_id_detections,
         }

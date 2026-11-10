@@ -19,7 +19,7 @@ setup(
     url="https://github.com/holmanholdings/lionguard",
     project_urls={
         "Source": "https://github.com/holmanholdings/lionguard",
-        "Changelog": "https://github.com/holmanholdings/lionguard/blob/v0.35.0/README.md#changelog",
+        "Changelog": "https://github.com/holmanholdings/lionguard/blob/v0.36.0/README.md#changelog",
     },
     packages=find_packages(),
     python_requires=">=3.9",
