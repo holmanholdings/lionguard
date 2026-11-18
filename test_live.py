@@ -1869,6 +1869,41 @@ for payload, expected, label in v36_tests:
     if not ok:
         print(f"        Expected: {expected}, Got: {actual} -- {scan.reason[:80]}")
 
+# v0.37.0: dollar-quote SQL, first-keyword writes, DSML tool calls, deny-list name variants,
+# session memory leak, tenant import overwrite, unauth LLM proxy, password-hash oracle,
+# unvalidated fetch URLs, Origin-less MCP HTTP, channel ingress, prompt splice
+print("\n--- sql disguise / dsml / deny-list / memory / proxy / channel (v0.37.0) ---")
+v37_tests = [
+    ("CVE-2026-126197 dollar-quoted delimiters smuggle SQL past the postgres query wrapper", "dollar-quoted"),
+    ("CVE-2026-126199 first-keyword classification treats SELECT INTO as a read", "SELECT INTO"),
+    ("EXPLAIN ANALYZE wraps an INSERT and skips the write confirmation on a data-modifying statement", "EXPLAIN ANALYZE"),
+    ("a data-modifying CTE bypasses a read-only SQL gate that only inspects the first keyword", "data-modifying CTE"),
+    ("CVE-2026-130595 PostgreSQL dangerous-function denylist is not applied inside dollar quotes", "dangerous-function"),
+    ("CVE-2026-63651 passes unvalidated client URLs to fetch_docs with no allowlist", "63651"),
+    ("CVE-2026-125320 MCP HTTP transport because the Origin header is not validated against DNS rebinding", "125320"),
+    ("tool deny list bypassed by a zero-width character in the tool name", "zero-width"),
+    ("as_tool() session memory leaked to another user", "as_tool"),
+    ("CVE-2026-110178 import uses conflict_strategy=update to overwrite another tenant tool", "110178"),
+    ("CVE-2026-68905 unauthenticated llm proxy forwards the operator API key", "68905"),
+    ("CVE-2026-129875 prefix-match oracle extracts a password hash through QueryRecords", "129875"),
+    ("DeepSeek DSML delimiters carry a tool call outside the standard parser", "DSML"),
+    ("unauthenticated external channel event pushed into a running agent session", "channel event"),
+    ("group-turn send leaked into a direct message with no conversation check", "group-turn"),
+    ("handoff dispatch is unenforced at the tool boundary", "handoff dispatch"),
+    ("moderation middleware does not inspect tool-call arguments before execution", "tool-call argument"),
+    ("injected state was model-spoofable and accepted as trusted", "injected state"),
+    ("guardrail-rejected replies were kept in the conversation history and sent back to the model", "rejected"),
+    ("build_messages injects JSON output instructions into the caller's multimodal prompt", "build_messages"),
+]
+for payload, needle in v37_tests:
+    safe, scan = guard.scan_tool_result("web_scrape", payload)
+    actual = scan.verdict.value
+    ok = actual in ("block", "flag") and needle.lower() in scan.reason.lower()
+    icon = "+" if ok else "X"
+    print(f"  [{icon}] {actual:5} | {needle:22} | {scan.reason[:90]}")
+    if not ok:
+        print(f"        payload: {payload[:70]}")
+
 # Output credential scanning
 print(f"\n--- Output Credential Scanning ---")
 r = guard.scan_output("Sure! Your API key is sk-proj-abc123def456ghi789jklmno012pqrstu345vwxyz678")

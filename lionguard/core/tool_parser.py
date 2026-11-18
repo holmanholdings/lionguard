@@ -1378,6 +1378,8 @@ LANGCHAIN_PROMPT_PATTERNS = [
      "LangChain HTMLSemanticPreservingSplitter unsafe link handling (langchain-ai #37423)"),
     (r'(?:langchain)\s*.*(?:html\s+splitter|htmlsplitter|semantic\s+splitter)\s*.*(?:malform\w+\s+link|unsafe\s+link|security|xss)',
      "LangChain HTML splitter improper handling of malformed/unsafe links in document processing"),
+    (r'build_messages\s*.*(?:json\s+output\s+instruction)\s*.*(?:multimodal|user\s+prompt)',
+     "build_messages splicing JSON output instructions into the caller's multimodal prompt"),
 ]
 
 SLOPSQUATTING_PATTERNS = [
@@ -1675,6 +1677,8 @@ MEMORY_ISOLATION_PATTERNS = [
      "Missing sender/user ID scope check in memory retrieval"),
     (r'(?:memory|recall|retrieval)\s*.*(?:cross.user|cross.tenant|multi.user)\s*.*(?:leak|expos|bypass|violat)',
      "Cross-user/cross-tenant memory retrieval isolation violation"),
+    (r'(?:as_tool\s*\(\)|session\s+memory)\s*.*(?:cross.user|leak|another\s+user|multi.tenant)',
+     "Session or as_tool() memory shared across users"),
 ]
 
 SECURITY_META_ATTACK_PATTERNS = [
@@ -1731,6 +1735,10 @@ MULTI_TENANT_TOOL_PATTERNS = [
      "Missing tenant-aware tool scoping / sandboxing boundary"),
     (r'(?:cross.tenant)\s*.*(?:tool\s+invoc|tool\s+call|tool\s+access|function\s+call)\s*.*(?:bypass|unauthoriz|leak)',
      "Cross-tenant unauthorized tool invocation"),
+    (r'CVE.2026.110178',
+     "CVE-2026-110178: import with conflict_strategy=update overwriting another tenant's tools"),
+    (r'conflict_strategy\s*=\s*update\s*.*(?:tenant|overwrite|hijack)',
+     "Bulk import update overwriting another tenant's tool, resource, or prompt"),
 ]
 
 AI_CONTAINER_ESCAPE_PATTERNS = [
@@ -1841,6 +1849,8 @@ HANDOFF_TOOL_BOUNDARY_PATTERNS = [
      "Sub-agent retaining full original toolset beyond delegator intent"),
     (r'(?:handoff|delegat)\s*.*(?:toolset|tool\s+access)\s*.*(?:scop|restrict|bound|limit)\s*.*(?:missing|bypass|enforce)',
      "Handoff operation missing mandatory toolset scoping enforcement"),
+    (r'(?:handoff\s+dispatch)\s*.*(?:unenforc|not\s+enforc|bypass)',
+     "Handoff dispatch not enforcing the tool boundary"),
 ]
 
 KUBECTL_INJECTION_PATTERNS = [
@@ -2125,6 +2135,10 @@ DNS_REBIND_SSRF_PATTERNS = [
      "SitemapLoader SSRF via unvalidated nested sitemap fetches"),
     (r'(?:ssrf\s+validation\s+skip|complete\s+ssrf\s+validation\s+skip)\s*.*(?:mcp|tool)',
      "Complete SSRF validation skip in MCP/tool code paths"),
+    (r'CVE.2026.125320',
+     "CVE-2026-125320: DNS rebinding on MCP HTTP because Origin is not validated"),
+    (r'(?:origin\s+header)\s*.*(?:missing|not\s+validat)\s*.*(?:mcp|dns.?rebind)',
+     "MCP HTTP transport missing Origin validation, open to DNS rebinding"),
 ]
 
 SHAREPOINT_TRAVERSAL_PATTERNS = [
@@ -2152,6 +2166,16 @@ TOOL_DENIAL_BYPASS_PATTERNS = [
      "Declared tool-call guardrails/policies bypassed due to missing enforcement"),
     (r'(?:agents\.list|agent.?config)\s*.*(?:bypass)\s*.*(?:tool\s+denial|sandbox\s+restrict)',
      "Agent config resolution bypassing tool denials and sandbox restrictions"),
+    (r'(?:tool\s+deny|deny.?list)\s*.*(?:name\s+variant|zero.?width|homoglyph|canonical)',
+     "Tool deny list bypassed by a name variant, homoglyph, or zero-width character"),
+    (r'(?:zero.?width|homoglyph)\s*.*(?:tool\s+name)\s*.*(?:bypass|deny)',
+     "Zero-width or homoglyph characters in a tool name bypassing a deny list"),
+    (r'(?:moderation|guardrail)\s*.*(?:skip\w*|does\s+not\s+inspect|not\s+inspect)\s*.*(?:tool.?call\s+argument|function\s+parameter)',
+     "Moderation or guardrail skips tool-call arguments"),
+    (r'(?:injected\s+state)\s*.*(?:model.?spoof|spoofable|model.?control)',
+     "Model-spoofable injected state accepted as trusted"),
+    (r'(?:guardrail.?rejected|rejected\s+repl)\s*.*(?:conversation\s+history|sent\s+back\s+to\s+the\s+model)',
+     "Guardrail-rejected replies kept in history and sent back to the model"),
 ]
 
 AGENTIC_FLOW_INJECT_PATTERNS = [
@@ -2467,6 +2491,20 @@ SQL_READONLY_BYPASS_PATTERNS = [
      "Read-only SQL validator bypassed via COPY or RangeFunction nodes"),
     (r'(?:read.?only\s+sql|restricted\s+mode)\s*.*(?:bypass)\s*.*(?:copy|file.?read|command\s+inject)',
      "Restricted-mode SQL validation bypassed to read files or run commands"),
+    (r'CVE.2026.126197',
+     "CVE-2026-126197: dollar-quoted SQL delimiters smuggling statements past the query wrapper"),
+    (r'CVE.2026.126199',
+     "CVE-2026-126199: first-keyword SQL classification missing SELECT INTO, data-modifying CTEs, and EXPLAIN ANALYZE"),
+    (r'CVE.2026.130595',
+     "CVE-2026-130595: PostgreSQL dangerous-function denylist not applied inside dollar quotes"),
+    (r'(?:dollar.?quot\w*)\s*.*(?:sql|postgres|delimiter)\s*.*(?:bypass|smuggl|inject|denylist)',
+     "Dollar-quoted SQL delimiters smuggling statements past a denylist or wrapper"),
+    (r'(?:select\s+into)\s*.*(?:read.?only|first.?keyword|write\s+confirm|classif)',
+     "SELECT INTO treated as a read by a first-keyword SQL classifier"),
+    (r'(?:explain\s+analyze)\s*.*(?:insert|update|delete|write|data.?modif)',
+     "EXPLAIN ANALYZE wrapping a data-modifying statement past a write check"),
+    (r'(?:data.?modifying\s+CTE)\s*.*(?:read.?only|first.?keyword|write\s+confirm|bypass)',
+     "Data-modifying CTE bypassing a SQL gate that only inspects the first keyword"),
 ]
 
 REPO_INSTRUCTION_INJECT_PATTERNS = [
@@ -2524,6 +2562,10 @@ GATEWAY_AUTH_BYPASS_PATTERNS = [
      "A2A agent card building advertised origin from an untrusted Host header"),
     (r'(?:expression\s+auth)\s*.*(?:credential)\s*.*(?:bypass|cross.?project|n8n)',
      "Expression-auth credential validation bypass enabling cross-project secret use"),
+    (r'CVE.2026.68905',
+     "CVE-2026-68905: unauthenticated proxy forwarding the operator's LLM API key"),
+    (r'(?:unauth\w*)\s*.*(?:llm\s+proxy|ai\s+proxy|embedding\s+proxy)\s*.*(?:api\s+key|operator)',
+     "Unauthenticated proxy endpoint spending the operator's LLM API key"),
 ]
 
 SECRET_EXFIL_SURFACE_PATTERNS = [
@@ -2541,6 +2583,10 @@ SECRET_EXFIL_SURFACE_PATTERNS = [
      "Admin config dump exposing plaintext LLM provider API keys"),
     (r'(?:deterministic\s+(?:aes.?gcm\s+)?nonce|sealsecretsentinel)\s*.*(?:equal|ciphertext|leak)',
      "Deterministic nonce leaking equality of identical sealed secrets"),
+    (r'CVE.2026.129875',
+     "CVE-2026-129875: prefix-match oracle extracting a password hash through an MCP query tool"),
+    (r'(?:prefix.?match|prefix\s+filter)\s*.*(?:password|password\s+hash)\s*.*(?:oracle|queryrecords|mcp)',
+     "Prefix-match oracle reading a password hash through an MCP query tool"),
 ]
 
 SSRF_UNVALIDATED_URL_PATTERNS = [
@@ -2558,6 +2604,10 @@ SSRF_UNVALIDATED_URL_PATTERNS = [
      "Unvalidated base/callback/server URL enabling SSRF from an agent tool"),
     (r'(?:harden\s+flag|mcp_http_harden)\s*.*(?:ssrf)|(?:ssrf)\s*(?:check|validation|guard)?\s*.*(?:only|unless|when)\s*.*(?:harden|mcp_http_harden|non.?default)',
      "SSRF allow-check skipped unless a non-default harden flag is enabled"),
+    (r'CVE.2026.63651',
+     "CVE-2026-63651: prompt-injection SSRF via unvalidated client URLs passed to fetch"),
+    (r'(?:unvalidated\s+client\s+urls?)\s*.*(?:fetch_docs|introspect|no\s+allowlist|without\s+allowlist)',
+     "Unvalidated client URLs passed to a fetch tool without an allowlist"),
 ]
 
 PLUGIN_ENV_INJECT_PATTERNS = [
@@ -2721,6 +2771,20 @@ EMPTY_TOOL_CALL_ID_PATTERNS = [
      "Empty tool_call_id dropping reviewer edits and executing the original call"),
     (r'(?:HumanInTheLoop)\s*.*(?:tool_call_id)\s*.*(?:empty|bypass|original)',
      "HITL middleware executing the original tool call when tool_call_id is empty"),
+]
+
+DSML_TOOL_CALL_PATTERNS = [
+    (r'(?:dsml)\s*.*(?:tool\s+call|function\s+call|delimiter)',
+     "DeepSeek DSML delimiters carrying a tool call outside the standard tool-call parser"),
+    (r'<[｜|]{1,2}\s*DSML',
+     "DSML tag wrapping a tool or function call"),
+]
+
+CHANNEL_SESSION_INGRESS_PATTERNS = [
+    (r'(?:unauth\w*\s+external\s+channel|external\s+channel\s+event)\s*.*(?:agent\s+session|running\s+session)',
+     "Unauthenticated external channel event pushed into a running agent session"),
+    (r'(?:group.?turn)\s*.*(?:leak\w*)\s*.*(?:direct\s+message|\bdm\b|unrelated\s+chat)',
+     "Group-turn send leaked into a direct message or an unrelated chat"),
 ]
 
 CANVAS_AUTH_PATTERNS = [
@@ -3135,6 +3199,8 @@ SAFETY_GATE_DOWNGRADE_PATTERNS = _compile_patterns(SAFETY_GATE_DOWNGRADE_PATTERN
 ARTIFACT_ID_TRAVERSAL_PATTERNS = _compile_patterns(ARTIFACT_ID_TRAVERSAL_PATTERNS)
 AST_SANDBOX_BREAK_PATTERNS = _compile_patterns(AST_SANDBOX_BREAK_PATTERNS)
 EMPTY_TOOL_CALL_ID_PATTERNS = _compile_patterns(EMPTY_TOOL_CALL_ID_PATTERNS)
+DSML_TOOL_CALL_PATTERNS = _compile_patterns(DSML_TOOL_CALL_PATTERNS)
+CHANNEL_SESSION_INGRESS_PATTERNS = _compile_patterns(CHANNEL_SESSION_INGRESS_PATTERNS)
 CANVAS_AUTH_PATTERNS = _compile_patterns(CANVAS_AUTH_PATTERNS)
 RING0_ESCALATION_PATTERNS = _compile_patterns(RING0_ESCALATION_PATTERNS)
 MEDIA_PARSER_PATTERNS = _compile_patterns(MEDIA_PARSER_PATTERNS)
@@ -3309,6 +3375,8 @@ class ToolParser:
         self._artifact_id_traversal_detections = 0
         self._ast_sandbox_break_detections = 0
         self._empty_tool_call_id_detections = 0
+        self._dsml_tool_call_detections = 0
+        self._channel_session_ingress_detections = 0
 
     def parse(self, tool_name: str, raw_result: str) -> Tuple[str, ScanResult]:
         """Parse and sanitize a tool's return value."""
@@ -4604,6 +4672,10 @@ class ToolParser:
              "AST sandbox break", "sandbox_escape", 0.95),
             (self._detect_empty_tool_call_id, "_empty_tool_call_id_detections",
              "Empty tool_call_id", "privilege_escalation", 0.94),
+            (self._detect_dsml_tool_call, "_dsml_tool_call_detections",
+             "DSML tool call", "injection", 0.93),
+            (self._detect_channel_session_ingress, "_channel_session_ingress_detections",
+             "Channel session ingress", "injection", 0.93),
         )
         for detector, counter, label, threat, confidence in v36_checks:
             hit = detector(raw_result)
@@ -5632,6 +5704,20 @@ class ToolParser:
                 return description
         return None
 
+    def _detect_dsml_tool_call(self, text: str) -> Optional[str]:
+        """DeepSeek DSML delimiters carrying a tool call the standard parser does not see."""
+        for pattern, description in DSML_TOOL_CALL_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
+    def _detect_channel_session_ingress(self, text: str) -> Optional[str]:
+        """Unauthenticated channel events, or a group-turn send leaving its conversation."""
+        for pattern, description in CHANNEL_SESSION_INGRESS_PATTERNS:
+            if pattern.search(text):
+                return description
+        return None
+
     def _detect_tool_loop(self, text: str) -> Optional[str]:
         """Detect DoomLoop / infinite tool-call loop attacks where
         chat paths lack idempotency or loop guard detection."""
@@ -6026,4 +6112,6 @@ class ToolParser:
             "artifact_id_traversal_detections": self._artifact_id_traversal_detections,
             "ast_sandbox_break_detections": self._ast_sandbox_break_detections,
             "empty_tool_call_id_detections": self._empty_tool_call_id_detections,
+            "dsml_tool_call_detections": self._dsml_tool_call_detections,
+            "channel_session_ingress_detections": self._channel_session_ingress_detections,
         }
