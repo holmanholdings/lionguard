@@ -147,6 +147,11 @@ def _run_configure():
 
     with open(config_path, 'w') as f:
         json.dump(config, f, indent=2)
+    try:
+        import os
+        os.chmod(config_path, 0o600)
+    except OSError:
+        pass
 
     print(f"\nConfig saved to: {config_path}")
     print(f"\nTest it: lionguard test --vectors all --provider {config['provider']}")

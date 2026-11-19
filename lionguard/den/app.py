@@ -83,9 +83,28 @@ def load_config() -> dict:
     }
 
 
+def _lock_config(path: Path) -> None:
+    """Best-effort owner-only permissions. The file can hold an API key."""
+    import os
+    import subprocess
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    if os.name == "nt":
+        user = os.environ.get("USERNAME", "")
+        if user:
+            subprocess.run(
+                ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(R,W)"],
+                check=False,
+                capture_output=True,
+            )
+
+
 def save_config(cfg: dict):
     CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     CONFIG_PATH.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    _lock_config(CONFIG_PATH)
 
 
 FLEET = {

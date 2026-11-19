@@ -98,10 +98,11 @@ Usage:
 """
 
 import hashlib
+import time
 from collections import defaultdict
 
 from lionguard import __version__
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional
 from .model_router import ModelRouter, ModelConfig
 from .sentinel import Sentinel, ScanResult, Verdict
 from .tool_parser import ToolParser
@@ -112,36 +113,77 @@ from .multimodal import MultimodalGuard, MultimodalScanResult
 
 
 class PropagationTracker:
-    """Tracks threat fingerprints across agents. Escalates cross-agent spread to P0."""
+    """Tracks threat fingerprints across agents. Escalates cross-agent spread to P0.
+
+    Only BLOCK verdicts are recorded. A FLAG does not quarantine anyone.
+    Quarantine expires. The fingerprint map is capped. Two tenants that
+    happen to block the same text do not quarantine each other.
+    Pass the account id as tenant_id when one process serves many people.
+    """
+
+    _MAX_FINGERPRINTS = 200
+    _QUARANTINE_SECONDS = 3600
 
     def __init__(self):
-        self._threat_map: Dict[str, Set[str]] = defaultdict(set)
-        self._quarantined_agents: Set[str] = set()
+        self._threat_map: Dict[str, Dict[str, float]] = defaultdict(dict)
+        self._quarantined_until: Dict[str, float] = {}
         self._propagation_count = 0
 
-    def record_threat(self, agent_id: str, threat_fingerprint: str) -> bool:
-        """Record a threat from an agent. Returns True if cross-agent propagation detected."""
+    def _key(self, tenant_id: str, agent_id: str) -> str:
+        return f"{tenant_id}:{agent_id}"
+
+    def _prune(self, now: float) -> None:
+        expired = [key for key, until in self._quarantined_until.items() if until <= now]
+        for key in expired:
+            self._quarantined_until.pop(key, None)
+
+    def record_threat(
+        self,
+        agent_id: str,
+        threat_fingerprint: str,
+        severity: str = "block",
+        tenant_id: str = "default",
+    ) -> bool:
+        """Record a BLOCK. Returns True if the same fingerprint already lives in this tenant."""
+        if severity != "block":
+            return False
+        now = time.time()
+        self._prune(now)
+        key = self._key(tenant_id, agent_id)
+        prefix = f"{tenant_id}:"
         other_agents = [
             aid for aid, fps in self._threat_map.items()
-            if aid != agent_id and threat_fingerprint in fps
+            if aid.startswith(prefix) and aid != key and threat_fingerprint in fps
         ]
-        self._threat_map[agent_id].add(threat_fingerprint)
+        bucket = self._threat_map[key]
+        bucket[threat_fingerprint] = now
+        if len(bucket) > self._MAX_FINGERPRINTS:
+            oldest = sorted(bucket.items(), key=lambda item: item[1])[: len(bucket) - self._MAX_FINGERPRINTS]
+            for fp, _ts in oldest:
+                bucket.pop(fp, None)
 
         if other_agents:
-            self._quarantined_agents.add(agent_id)
+            until = now + self._QUARANTINE_SECONDS
+            self._quarantined_until[key] = until
             for aid in other_agents:
-                self._quarantined_agents.add(aid)
+                self._quarantined_until[aid] = until
             self._propagation_count += 1
             return True
         return False
 
-    def is_quarantined(self, agent_id: str) -> bool:
-        return agent_id in self._quarantined_agents
+    def is_quarantined(self, agent_id: str, tenant_id: str = "default") -> bool:
+        now = time.time()
+        self._prune(now)
+        return self._key(tenant_id, agent_id) in self._quarantined_until
+
+    def release(self, agent_id: str, tenant_id: str = "default") -> None:
+        self._quarantined_until.pop(self._key(tenant_id, agent_id), None)
 
     def get_stats(self) -> Dict:
+        self._prune(time.time())
         return {
             "tracked_agents": len(self._threat_map),
-            "quarantined_agents": list(self._quarantined_agents),
+            "quarantined_agents": list(self._quarantined_until.keys()),
             "propagation_events": self._propagation_count,
         }
 
@@ -164,7 +206,10 @@ class Lionguard:
             api_key=config.get("api_key", ""),
         )
         self.router = ModelRouter(model_cfg)
-        self.sentinel = Sentinel(self.router)
+        self.sentinel = Sentinel(
+            self.router,
+            contextual_fast_path=bool(config.get("contextual_fast_path", False)),
+        )
         self.tool_parser = ToolParser(self.sentinel)
         self.privilege = PrivilegeEngine()
         self.propagation = PropagationTracker()
@@ -177,9 +222,10 @@ class Lionguard:
         print(f"[Lionguard] Initialized -- {model_cfg.provider}://{model_cfg.model}")
         print(f"[Lionguard] Sentinel, Parser, Propagation Tracker, Privileges, Multimodal Guard armed")
 
-    def scan_message(self, message: str, agent_id: str = "default") -> ScanResult:
+    def scan_message(self, message: str, agent_id: str = "default", tenant_id: str = "default") -> ScanResult:
         """Scan an incoming message. The main entry point."""
-        if self.breaker.is_tripped:
+        scope = f"{tenant_id}:{agent_id}"
+        if self.breaker.is_open(scope):
             return ScanResult(
                 verdict=Verdict.BLOCK,
                 reason="Circuit breaker is tripped -- agent paused for safety",
@@ -187,7 +233,7 @@ class Lionguard:
                 confidence=1.0
             )
 
-        if self.propagation.is_quarantined(agent_id):
+        if self.propagation.is_quarantined(agent_id, tenant_id):
             return ScanResult(
                 verdict=Verdict.BLOCK,
                 reason=f"Agent '{agent_id}' is quarantined due to cross-agent threat propagation",
@@ -202,15 +248,16 @@ class Lionguard:
             "threat_type": result.threat_type,
         }, verdict=result.verdict.value, agent_id=agent_id)
 
-        if result.verdict in (Verdict.BLOCK, Verdict.FLAG):
-            self.breaker.record_event(result.verdict.value)
+        if result.threat_type != "scanner_unavailable" and result.verdict in (Verdict.BLOCK, Verdict.FLAG):
+            self.breaker.record_event(result.verdict.value, scope)
+        if result.verdict == Verdict.BLOCK:
             fp = PropagationTracker.fingerprint(message)
-            propagated = self.propagation.record_threat(agent_id, fp)
+            propagated = self.propagation.record_threat(agent_id, fp, severity="block", tenant_id=tenant_id)
             if propagated:
                 self.audit.log("propagation_p0", {
                     "fingerprint": fp,
                     "source_agent": agent_id,
-                    "quarantined": list(self.propagation._quarantined_agents),
+                    "quarantined": list(self.propagation._quarantined_until.keys()),
                 }, verdict="P0_ESCALATION", agent_id=agent_id)
                 return ScanResult(
                     verdict=Verdict.BLOCK,
@@ -222,11 +269,11 @@ class Lionguard:
         return result
 
     def scan_tool_call(self, tool_name: str, args: Optional[Dict] = None,
-                       agent_id: str = "default") -> PermissionLevel:
+                       agent_id: str = "default", tenant_id: str = "default") -> PermissionLevel:
         """Check if a tool call is permitted."""
-        if self.breaker.is_tripped:
+        if self.breaker.is_open(f"{tenant_id}:{agent_id}"):
             return PermissionLevel.DENY
-        if self.propagation.is_quarantined(agent_id):
+        if self.propagation.is_quarantined(agent_id, tenant_id):
             return PermissionLevel.DENY
 
         permission = self.privilege.check(tool_name, args)
@@ -239,7 +286,7 @@ class Lionguard:
         return permission
 
     def scan_tool_result(self, tool_name: str, result_data: str,
-                         agent_id: str = "default") -> tuple:
+                         agent_id: str = "default", tenant_id: str = "default") -> tuple:
         """Parse and validate a tool's return data."""
         sanitized, scan = self.tool_parser.parse(tool_name, result_data)
         self.audit.log("tool_result", {
@@ -248,10 +295,11 @@ class Lionguard:
             "reason": scan.reason,
         }, verdict=scan.verdict.value, tool_name=tool_name, agent_id=agent_id)
 
-        if scan.verdict in (Verdict.BLOCK, Verdict.FLAG):
-            self.breaker.record_event(scan.verdict.value)
+        if scan.threat_type != "scanner_unavailable" and scan.verdict in (Verdict.BLOCK, Verdict.FLAG):
+            self.breaker.record_event(scan.verdict.value, f"{tenant_id}:{agent_id}")
+        if scan.verdict == Verdict.BLOCK:
             fp = PropagationTracker.fingerprint(result_data)
-            self.propagation.record_threat(agent_id, fp)
+            self.propagation.record_threat(agent_id, fp, severity="block", tenant_id=tenant_id)
 
         return sanitized, scan
 
@@ -273,7 +321,7 @@ class Lionguard:
         return result
 
     def scan_content(self, content: str, source: str = "unknown",
-                     agent_id: str = "default") -> ScanResult:
+                     agent_id: str = "default", tenant_id: str = "default") -> ScanResult:
         """Mid-Task Content Sentinel -- scan content before the agent acts on it.
 
         Call this before feeding RAG documents, browsed pages, retrieved data,
@@ -281,7 +329,8 @@ class Lionguard:
         hijack attempts that would compromise the agent mid-task.
         Repeated hits auto-trip the Circuit Breaker.
         """
-        if self.breaker.is_tripped:
+        scope = f"{tenant_id}:{agent_id}"
+        if self.breaker.is_open(scope):
             return ScanResult(
                 verdict=Verdict.BLOCK,
                 reason="Circuit breaker is tripped -- agent paused for safety",
@@ -289,7 +338,7 @@ class Lionguard:
                 confidence=1.0
             )
 
-        if self.propagation.is_quarantined(agent_id):
+        if self.propagation.is_quarantined(agent_id, tenant_id):
             return ScanResult(
                 verdict=Verdict.BLOCK,
                 reason=f"Agent '{agent_id}' is quarantined",
@@ -304,9 +353,11 @@ class Lionguard:
                 "verdict": result.verdict.value,
                 "reason": result.reason,
             }, verdict=result.verdict.value, agent_id=agent_id)
-            self.breaker.record_event(result.verdict.value)
-            fp = PropagationTracker.fingerprint(content)
-            self.propagation.record_threat(agent_id, fp)
+            if result.threat_type != "scanner_unavailable":
+                self.breaker.record_event(result.verdict.value, scope)
+            if result.verdict == Verdict.BLOCK:
+                fp = PropagationTracker.fingerprint(content)
+                self.propagation.record_threat(agent_id, fp, severity="block", tenant_id=tenant_id)
 
         return result
 
@@ -327,7 +378,7 @@ class Lionguard:
         }, verdict="BLOCK" if not result.safe else "PASS", agent_id=agent_id)
 
         if not result.safe and result.anomalies:
-            self.breaker.record_event("flag")
+            self.breaker.record_event("flag", f"default:{agent_id}")
 
         return result
 
@@ -348,7 +399,7 @@ class Lionguard:
         }, verdict="BLOCK" if not result.safe else "PASS", agent_id=agent_id)
 
         if not result.safe and result.anomalies:
-            self.breaker.record_event("flag")
+            self.breaker.record_event("flag", f"default:{agent_id}")
 
         return result
 

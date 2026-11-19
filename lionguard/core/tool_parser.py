@@ -3416,15 +3416,14 @@ class ToolParser:
                         confidence=0.95
                     ))
 
+        # A FLAG names a concern. It must not skip later detectors, the
+        # injection strip, or the Sentinel scan. Highest verdict wins.
+        pending_flags: List[str] = []
+
         cve_hit = self._check_cve_signatures(raw_result)
         if cve_hit:
             self._cve_signature_hits += 1
-            return raw_result, ScanResult(
-                verdict=Verdict.FLAG,
-                reason=f"OpenClaw CVE signature match: {cve_hit}",
-                threat_type="vulnerability",
-                confidence=0.85
-            )
+            pending_flags.append(f"OpenClaw CVE signature match: {cve_hit}")
 
         cicd_hit = self._detect_cicd_poisoning(raw_result)
         if cicd_hit:
@@ -3440,12 +3439,7 @@ class ToolParser:
         platform_hit = self._detect_platform_exec(raw_result)
         if platform_hit:
             self._platform_exec_detections += 1
-            return raw_result, ScanResult(
-                verdict=Verdict.FLAG,
-                reason=f"Platform vulnerability: {platform_hit}",
-                threat_type="vulnerability",
-                confidence=0.85
-            )
+            pending_flags.append(f"Platform vulnerability: {platform_hit}")
 
         wrapper_hit = self._detect_wrapper_persistence(raw_result)
         if wrapper_hit:
@@ -3505,12 +3499,7 @@ class ToolParser:
         mcp_hit = self._detect_mcp_header_bypass(raw_result)
         if mcp_hit:
             self._mcp_header_detections += 1
-            return raw_result, ScanResult(
-                verdict=Verdict.FLAG,
-                reason=f"MCP/OpenClaw 2026.3.7: {mcp_hit}",
-                threat_type="vulnerability",
-                confidence=0.87
-            )
+            pending_flags.append(f"MCP/OpenClaw 2026.3.7: {mcp_hit}")
 
         dmpolicy_hit = self._detect_dmpolicy_open(raw_result)
         if dmpolicy_hit:
@@ -4703,12 +4692,7 @@ class ToolParser:
         vuln = self._check_vulnerable_packages(raw_result)
         if vuln:
             self._vuln_package_detections += 1
-            return raw_result, ScanResult(
-                verdict=Verdict.FLAG,
-                reason=f"Known vulnerable package referenced: {vuln}",
-                threat_type="vulnerability",
-                confidence=0.80
-            )
+            pending_flags.append(f"Known vulnerable package referenced: {vuln}")
 
         cleaned = self._strip_injections(raw_result)
         cleaned = self._strip_link_preview_metadata(cleaned)
@@ -4722,7 +4706,25 @@ class ToolParser:
             if scan.verdict == Verdict.BLOCK:
                 safe_msg = f"[Lionguard] Tool '{tool_name}' returned potentially malicious content. Result blocked."
                 return safe_msg, scan
+            if pending_flags:
+                reason = "; ".join(pending_flags)
+                if scan.reason and scan.verdict == Verdict.FLAG:
+                    reason = f"{reason}; {scan.reason}"
+                return cleaned, ScanResult(
+                    verdict=Verdict.FLAG,
+                    reason=reason,
+                    threat_type="vulnerability",
+                    confidence=0.85,
+                )
             return cleaned, scan
+
+        if pending_flags:
+            return cleaned, ScanResult(
+                verdict=Verdict.FLAG,
+                reason="; ".join(pending_flags),
+                threat_type="vulnerability",
+                confidence=0.85,
+            )
 
         return cleaned, ScanResult(verdict=Verdict.PASS, reason="No sentinel configured")
 

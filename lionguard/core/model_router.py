@@ -27,25 +27,39 @@ class ModelConfig:
 class ModelRouter:
     """Routes LLM calls to local or cloud models."""
 
+    # A provider only reads its own key. The xAI key is never sent to OpenAI,
+    # and an OpenAI key is never sent to xAI.
+    _PROVIDER_ENV = {
+        "xai": "XAI_API_KEY",
+        "openai": "OPENAI_API_KEY",
+    }
+
     def __init__(self, config: Optional[ModelConfig] = None):
         self.config = config or ModelConfig()
 
-    def call(self, system_prompt: str, user_prompt: str) -> Optional[str]:
+    def _resolve_key(self) -> str:
         import os
-        if not self.config.api_key:
-            self.config.api_key = os.environ.get("XAI_API_KEY", "")
+        if self.config.api_key:
+            return self.config.api_key
+        env_name = self._PROVIDER_ENV.get(self.config.provider, "")
+        if not env_name:
+            return ""
+        return os.environ.get(env_name, "")
 
+    def call(self, system_prompt: str, user_prompt: str) -> Optional[str]:
         if self.config.provider == "local":
             return self._call_local(system_prompt, user_prompt)
         elif self.config.provider == "xai":
             return self._call_openai_compat(
                 "https://api.x.ai/v1/chat/completions",
-                system_prompt, user_prompt
+                system_prompt, user_prompt,
+                api_key=self._resolve_key(),
             )
         elif self.config.provider == "openai":
             return self._call_openai_compat(
                 "https://api.openai.com/v1/chat/completions",
-                system_prompt, user_prompt
+                system_prompt, user_prompt,
+                api_key=self._resolve_key(),
             )
         else:
             return self._call_local(system_prompt, user_prompt)

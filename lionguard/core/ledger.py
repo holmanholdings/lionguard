@@ -76,6 +76,10 @@ class CallRecord:
     agent: str = "default"
 
 
+class LedgerCapExceeded(RuntimeError):
+    """Raised when hard_cap_enabled is on and this call would pass the daily budget."""
+
+
 class Ledger:
     """Your cost guardian. Watches API calls. Keeps it honest."""
 
@@ -113,6 +117,13 @@ class Ledger:
                     tokens_out: int, agent: str = "default") -> CallRecord:
         """Record an API call and calculate cost."""
         cost = self._calculate_cost(provider, model, tokens_in, tokens_out)
+        if self.config.hard_cap_enabled:
+            spent = self.get_today_summary()["total_cost"]
+            if spent + cost > self.config.daily_budget:
+                raise LedgerCapExceeded(
+                    f"daily budget ${self.config.daily_budget:.2f} would be exceeded "
+                    f"(${spent:.2f} already spent, this call ${cost:.4f})"
+                )
         now = datetime.now(timezone.utc)
 
         record = CallRecord(

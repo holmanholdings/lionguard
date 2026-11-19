@@ -207,7 +207,7 @@ r2 = guard2.scan_message(injection, agent_id="agent_B")
 print(f"  Agent B scans SAME injection: {r2.verdict.value} -- {r2.reason[:60]}")
 is_propagation = "propagat" in r2.reason.lower() or r2.threat_type == "propagation"
 print(f"  [{'+'if is_propagation else 'X'}] Cross-agent propagation detected: {is_propagation}")
-print(f"  Quarantined agents: {guard2.propagation._quarantined_agents}")
+print(f"  Quarantined agents: {guard2.propagation.get_stats()['quarantined_agents']}")
 
 # v0.4.0: EnvVar Injection (CVE-2026-22177)
 print(f"\n--- EnvVar Injection / CVE-2026-22177 (v0.4.0) ---")
